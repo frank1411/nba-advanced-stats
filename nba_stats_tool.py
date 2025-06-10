@@ -124,6 +124,37 @@ def get_team_stats(season='2024-25', season_type='Regular Season'):
         print(f"❌ Error al obtener los datos: {e}")
         return pd.DataFrame()
 
+def save_to_csv(stats, filename):
+    """
+    Guarda las estadísticas en un archivo CSV, ordenadas alfabéticamente por equipo.
+    
+    Args:
+        stats (DataFrame): DataFrame con las estadísticas
+        filename (str): Nombre del archivo CSV
+    """
+    if stats is None or stats.empty:
+        print(f"No hay datos para guardar en {filename}")
+        return
+    
+    # Hacer una copia para no modificar el DataFrame original
+    stats_sorted = stats.copy()
+    
+    # Ordenar por nombre de equipo (columna 'team')
+    stats_sorted = stats_sorted.sort_values('team')
+    
+    # Asegurarse de que el directorio de salida existe
+    import os
+    os.makedirs('output', exist_ok=True)
+    
+    # Definir el path completo
+    filepath = os.path.join('output', filename)
+    
+    try:
+        stats_sorted.to_csv(filepath, index=False)
+        print(f"✅ Datos guardados en {filepath} (ordenados alfabéticamente)")
+    except Exception as e:
+        print(f"❌ Error al guardar el archivo {filepath}: {e}")
+
 def print_stats(stats, title):
     """Muestra las estadísticas formateadas"""
     if stats is None or stats.empty:
@@ -148,11 +179,17 @@ if __name__ == "__main__":
     regular_season = get_team_stats(season_type='Regular Season')
     print_stats(regular_season, "ESTADÍSTICAS NBA 2024-25 - TEMPORADA REGULAR")
     
+    # Guardar estadísticas de temporada regular en CSV
+    if not regular_season.empty:
+        save_to_csv(regular_season, 'nba_regular_season_stats.csv')
+    
     # Intentar obtener estadísticas de playoffs
     try:
         playoffs = get_team_stats(season_type='Playoffs')
         if not playoffs.empty:
             print_stats(playoffs, "ESTADÍSTICAS NBA 2024-25 - PLAYOFFS")
+            # Guardar estadísticas de playoffs en CSV
+            save_to_csv(playoffs, 'nba_playoffs_stats.csv')
         else:
             print("\nℹ️  No hay datos disponibles para los playoffs de la temporada actual.")
     except Exception as e:
