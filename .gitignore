@@ -6,6 +6,7 @@ ENV/
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
 
 # Archivos de configuración de entornos virtuales
 .env
@@ -17,6 +18,44 @@ env/
 .vscode/
 *.swp
 *.swo
+
+# Machine Learning
+ML/models/*.pkl
+ML/models/*.h5
+ML/models/*.joblib
+ML/models/checkpoints/
+ML/models/*.pt
+ML/models/*.pth
+
+# Datos
+data/raw/
+data/processed/
+*.csv
+*.parquet
+*.feather
+*.h5
+*.hdf5
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# Logs y resultados
+logs/
+*.log
+output/predictions/
+
+# Archivos temporales
+*.tmp
+*~
+
+# Configuración local
+local_settings.py
+.env.local
+
+# Archivos de sistema operativo
+.DS_Store
+Thumbs.db
 
 # Archivos de datos
 *.csv
