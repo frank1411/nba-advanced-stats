@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from tqdm import tqdm
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Tuple
 
 # Configuración
 BASE_DIR = Path(__file__).parent.parent
@@ -24,6 +24,40 @@ SEASONS = [
     '2018-19', '2019-20', '2020-21', 
     '2021-22', '2022-23', '2023-24', '2024-25'
 ]
+
+# Ubicaciones de los estadios de la NBA (latitud, longitud)
+NBA_STADIUMS = {
+    'ATL': (33.7573, -84.3963),    # State Farm Arena
+    'BOS': (42.3662, -71.0621),    # TD Garden
+    'BKN': (40.6826, -73.9754),    # Barclays Center
+    'CHA': (35.2251, -80.8392),    # Spectrum Center
+    'CHI': (41.8806, -87.6742),    # United Center
+    'CLE': (41.4965, -81.6881),    # Rocket Mortgage FieldHouse
+    'DAL': (32.7903, -96.8103),    # American Airlines Center
+    'DEN': (39.7487, -105.008),    # Ball Arena
+    'DET': (42.6966, -83.2453),    # Little Caesars Arena
+    'GSW': (37.7679, -122.3876),   # Chase Center
+    'HOU': (29.7508, -95.3621),    # Toyota Center
+    'IND': (39.7639, -86.1557),    # Gainbridge Fieldhouse
+    'LAC': (34.0430, -118.2673),   # Crypto.com Arena
+    'LAL': (34.0430, -118.2673),   # Crypto.com Arena
+    'MEM': (35.1380, -90.0504),    # FedExForum
+    'MIA': (25.7814, -80.1890),    # FTX Arena
+    'MIL': (43.0451, -87.9173),    # Fiserv Forum
+    'MIN': (44.9795, -93.2761),    # Target Center
+    'NOP': (29.9490, -90.0821),    # Smoothie King Center
+    'NYK': (40.7505, -73.9934),    # Madison Square Garden
+    'OKC': (35.4634, -97.5151),    # Paycom Center
+    'ORL': (28.5392, -81.3836),    # Amway Center
+    'PHI': (39.9012, -75.1720),    # Wells Fargo Center
+    'PHX': (33.4457, -112.0712),   # Footprint Center
+    'POR': (45.5316, -122.6668),   # Moda Center
+    'SAC': (38.5802, -121.4997),   # Golden 1 Center
+    'SAS': (29.4270, -98.4375),    # AT&T Center
+    'TOR': (43.6435, -79.3791),    # Scotiabank Arena
+    'UTA': (40.7683, -111.9011),   # Vivint Arena
+    'WAS': (38.8981, -77.0209)     # Capital One Arena
+}
 
 # Headers mejorados para la API de la NBA
 HEADERS = {
@@ -46,6 +80,41 @@ HEADERS = {
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-platform': '"macOS"'
 }
+
+# Ubicaciones de los estadios de la NBA (latitud, longitud)
+NBA_STADIUMS = {
+    'ATL': (33.7573, -84.3963),    # State Farm Arena
+    'BOS': (42.3662, -71.0621),    # TD Garden
+    'BKN': (40.6826, -73.9754),    # Barclays Center
+    'CHA': (35.2251, -80.8392),    # Spectrum Center
+    'CHI': (41.8806, -87.6742),    # United Center
+    'CLE': (41.4965, -81.6881),    # Rocket Mortgage FieldHouse
+    'DAL': (32.7903, -96.8103),    # American Airlines Center
+    'DEN': (39.7487, -105.008),    # Ball Arena
+    'DET': (42.6966, -83.2453),    # Little Caesars Arena
+    'GSW': (37.7679, -122.3876),   # Chase Center
+    'HOU': (29.7508, -95.3621),    # Toyota Center
+    'IND': (39.7639, -86.1557),    # Gainbridge Fieldhouse
+    'LAC': (34.0430, -118.2673),   # Crypto.com Arena
+    'LAL': (34.0430, -118.2673),   # Crypto.com Arena (mismo que LAC)
+    'MEM': (35.1380, -90.0504),    # FedExForum
+    'MIA': (25.7814, -80.1890),    # FTX Arena
+    'MIL': (43.0451, -87.9173),    # Fiserv Forum
+    'MIN': (44.9795, -93.2761),    # Target Center
+    'NOP': (29.9490, -90.0821),    # Smoothie King Center
+    'NYK': (40.7505, -73.9934),    # Madison Square Garden
+    'OKC': (35.4634, -97.5151),    # Paycom Center
+    'ORL': (28.5392, -81.3836),    # Amway Center
+    'PHI': (39.9012, -75.1720),    # Wells Fargo Center
+    'PHX': (33.4457, -112.0712),   # Footprint Center
+    'POR': (45.5316, -122.6668),   # Moda Center
+    'SAC': (38.5802, -121.4997),   # Golden 1 Center
+    'SAS': (29.4270, -98.4375),    # AT&T Center
+    'TOR': (43.6435, -79.3791),    # Scotiabank Arena
+    'UTA': (40.7683, -111.9011),   # Vivint Arena
+    'WAS': (38.8982, -77.0209)     # Capital One Arena
+}
+
 
 class NBADataFetcher:
     def __init__(self):
@@ -486,6 +555,239 @@ class NBADataFetcher:
         
         return merged
 
+    def calculate_rest_days_and_b2b(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calcula los días de descanso y partidos B2B (Back-to-Back) para cada equipo.
+        
+        Args:
+            df: DataFrame con los datos de los partidos
+            
+        Returns:
+            DataFrame con columnas adicionales para días de descanso y B2B
+        """
+        print("📅 Calculando días de descanso y partidos B2B...")
+        
+        # Hacer una copia para no modificar el original
+        df = df.copy()
+        
+        # Asegurarse de que la columna de fecha sea datetime
+        if not pd.api.types.is_datetime64_any_dtype(df['GAME_DATE']):
+            df['GAME_DATE'] = pd.to_datetime(df['GAME_DATE'])
+        
+        # Ordenar por equipo y fecha
+        df = df.sort_values(['TEAM_ID_HOME', 'GAME_DATE'])
+        
+        # Inicializar columnas para equipos locales
+        df['DAYS_REST_HOME'] = np.nan
+        df['IS_B2B_HOME'] = False
+        
+        # Calcular días de descanso y B2B para equipos locales
+        for team_id in df['TEAM_ID_HOME'].unique():
+            team_mask = df['TEAM_ID_HOME'] == team_id
+            team_games = df[team_mask].copy()
+            
+            # Calcular días desde el partido anterior
+            team_games['DAYS_REST'] = team_games['GAME_DATE'].diff().dt.days - 1
+            
+            # El primer partido de la temporada tendrá NaN, lo rellenamos con 3 (promedio de descanso)
+            team_games['DAYS_REST'] = team_games['DAYS_REST'].fillna(3)
+            
+            # Marcar partidos B2B (días de descanso = 0)
+            team_games['IS_B2B'] = team_games['DAYS_REST'] == 0
+            
+            # Actualizar el DataFrame original
+            df.loc[team_mask, 'DAYS_REST_HOME'] = team_games['DAYS_REST'].values
+            df.loc[team_mask, 'IS_B2B_HOME'] = team_games['IS_B2B'].values
+        
+        # Repetir para equipos visitantes
+        df = df.sort_values(['TEAM_ID_AWAY', 'GAME_DATE'])
+        
+        # Inicializar columnas para equipos visitantes
+        df['DAYS_REST_AWAY'] = np.nan
+        df['IS_B2B_AWAY'] = False
+        
+        for team_id in df['TEAM_ID_AWAY'].unique():
+            team_mask = df['TEAM_ID_AWAY'] == team_id
+            team_games = df[team_mask].copy()
+            
+            # Calcular días desde el partido anterior
+            team_games['DAYS_REST'] = team_games['GAME_DATE'].diff().dt.days - 1
+            
+            # El primer partido de la temporada tendrá NaN, lo rellenamos con 3 (promedio de descanso)
+            team_games['DAYS_REST'] = team_games['DAYS_REST'].fillna(3)
+            
+            # Marcar partidos B2B (días de descanso = 0)
+            team_games['IS_B2B'] = team_games['DAYS_REST'] == 0
+            
+            # Actualizar el DataFrame original
+            df.loc[team_mask, 'DAYS_REST_AWAY'] = team_games['DAYS_REST'].values
+            df.loc[team_mask, 'IS_B2B_AWAY'] = team_games['IS_B2B'].values
+        
+        # Ordenar por fecha para el resultado final
+        df = df.sort_values('GAME_DATE')
+        
+        return df
+
+    def calculate_travel_distances(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calcula las distancias de viaje para cada equipo entre partidos consecutivos.
+        
+        Args:
+            df: DataFrame con los datos de los partidos
+            
+        Returns:
+            DataFrame con columnas adicionales para distancias de viaje
+        """
+        print("✈️ Calculando distancias de viaje...")
+        
+        # Hacer una copia para no modificar el original
+        df = df.copy()
+        
+        # Asegurarse de que la columna de fecha sea datetime
+        if not pd.api.types.is_datetime64_any_dtype(df['GAME_DATE']):
+            df['GAME_DATE'] = pd.to_datetime(df['GAME_DATE'])
+        
+        # Ordenar por equipo y fecha
+        df = df.sort_values(['TEAM_ID_HOME', 'GAME_DATE'])
+        
+        # Inicializar columnas para distancias de viaje
+        df['TRAVEL_DISTANCE_HOME'] = 0.0
+        df['TRAVEL_DISTANCE_AWAY'] = 0.0
+        
+        # Función para calcular la distancia entre dos puntos (fórmula del semiverseno)
+        def haversine(lat1, lon1, lat2, lon2):
+            """
+            Calcula la distancia en millas entre dos puntos en la Tierra.
+            Utiliza la fórmula del semiverseno (Haversine formula).
+            """
+            from math import radians, sin, cos, sqrt, asin
+            
+            # Radio de la Tierra en millas
+            R = 3958.8
+            
+            # Convertir grados a radianes
+            lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+            
+            # Diferencia de latitud y longitud
+            dlat = lat2 - lat1
+            dlon = lon2 - lon1
+            
+            # Fórmula del semiverseno
+            a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+            c = 2 * asin(sqrt(a))
+            
+            # Distancia en millas
+            distance = R * c
+            return distance
+        
+        # Función para calcular la distancia de viaje para un equipo
+        def calculate_team_travel(team_games, team_id_col, team_abbr_col, is_home=True):
+            # Ordenar por fecha
+            team_games = team_games.sort_values('GAME_DATE')
+            
+            # Inicializar columna de distancia
+            distances = [0.0] * len(team_games)
+            
+            # Para cada partido a partir del segundo
+            for i in range(1, len(team_games)):
+                # Obtener las ubicaciones de los partidos consecutivos
+                prev_game = team_games.iloc[i-1]
+                curr_game = team_games.iloc[i]
+                
+                # Determinar las ubicaciones de los partidos
+                if is_home:
+                    # Para equipos locales, comparamos con el partido anterior como visitante o local
+                    if prev_game['TEAM_ID_HOME'] == curr_game['TEAM_ID_HOME']:
+                        # Partido anterior como local
+                        prev_abbr = prev_game['TEAM_ABBREVIATION_HOME']
+                        prev_loc = 'HOME'
+                    else:
+                        # Partido anterior como visitante
+                        prev_abbr = prev_game['TEAM_ABBREVIATION_AWAY']
+                        prev_loc = 'AWAY'
+                    
+                    curr_abbr = curr_game['TEAM_ABBREVIATION_HOME']
+                    curr_loc = 'HOME'
+                else:
+                    # Para equipos visitantes, comparamos con el partido anterior como local o visitante
+                    if prev_game['TEAM_ID_AWAY'] == curr_game['TEAM_ID_AWAY']:
+                        # Partido anterior como visitante
+                        prev_abbr = prev_game['TEAM_ABBREVIATION_AWAY']
+                        prev_loc = 'AWAY'
+                    else:
+                        # Partido anterior como local
+                        prev_abbr = prev_game['TEAM_ABBREVIATION_HOME']
+                        prev_loc = 'HOME'
+                    
+                    curr_abbr = curr_game['TEAM_ABBREVIATION_AWAY']
+                    curr_loc = 'AWAY'
+                
+                # Obtener coordenadas
+                if prev_abbr in NBA_STADIUMS and curr_abbr in NBA_STADIUMS:
+                    # Si el equipo jugó en casa en el partido anterior, usamos su estadio
+                    if prev_loc == 'HOME':
+                        lat1, lon1 = NBA_STADIUMS[prev_abbr]
+                    else:
+                        # Si fue visitante, usamos el estadio del oponente
+                        opp_abbr = prev_abbr if prev_abbr != curr_abbr else prev_game['TEAM_ABBREVIATION_HOME']
+                        lat1, lon1 = NBA_STADIUMS.get(opp_abbr, (0, 0))
+                    
+                    # Para el partido actual, usamos el estadio del partido
+                    lat2, lon2 = NBA_STADIUMS[curr_abbr] if curr_loc == 'HOME' else \
+                                NBA_STADIUMS.get(curr_game['TEAM_ABBREVIATION_HOME'], (0, 0))
+                    
+                    # Calcular distancia solo si las coordenadas son válidas
+                    if lat1 != 0 and lon1 != 0 and lat2 != 0 and lon2 != 0:
+                        distance = haversine(lat1, lon1, lat2, lon2)
+                        distances[i] = distance
+            
+            return distances
+        
+        # Calcular distancias para equipos locales
+        for team_id in df['TEAM_ID_HOME'].unique():
+            # Filtrar partidos donde el equipo jugó (como local o visitante)
+            team_games = df[(df['TEAM_ID_HOME'] == team_id) | (df['TEAM_ID_AWAY'] == team_id)].copy()
+            
+            if len(team_games) > 1:
+                # Ordenar por fecha
+                team_games = team_games.sort_values('GAME_DATE')
+                
+                # Calcular distancias para este equipo
+                for i in range(1, len(team_games)):
+                    prev_game = team_games.iloc[i-1]
+                    curr_game = team_games.iloc[i]
+                    
+                    # Determinar si el equipo es local o visitante en cada partido
+                    is_home_prev = prev_game['TEAM_ID_HOME'] == team_id
+                    is_home_curr = curr_game['TEAM_ID_HOME'] == team_id
+                    
+                    # Obtener las ubicaciones de los partidos
+                    if is_home_prev:
+                        prev_abbr = prev_game['TEAM_ABBREVIATION_HOME']
+                        prev_lat, prev_lon = NBA_STADIUMS[prev_abbr]
+                    else:
+                        prev_opp_abbr = prev_game['TEAM_ABBREVIATION_HOME']
+                        prev_lat, prev_lon = NBA_STADIUMS[prev_opp_abbr]
+                    
+                    if is_home_curr:
+                        curr_abbr = curr_game['TEAM_ABBREVIATION_HOME']
+                        curr_lat, curr_lon = NBA_STADIUMS[curr_abbr]
+                    else:
+                        curr_opp_abbr = curr_game['TEAM_ABBREVIATION_HOME']
+                        curr_lat, curr_lon = NBA_STADIUMS[curr_opp_abbr]
+                    
+                    # Calcular distancia
+                    distance = haversine(prev_lat, prev_lon, curr_lat, curr_lon)
+                    
+                    # Asignar la distancia al partido actual
+                    game_id = curr_game['GAME_ID']
+                    if is_home_curr:
+                        df.loc[df['GAME_ID'] == game_id, 'TRAVEL_DISTANCE_HOME'] = distance
+                    else:
+                        df.loc[df['GAME_ID'] == game_id, 'TRAVEL_DISTANCE_AWAY'] = distance
+        
+        return df
+
 def main():
     # Inicializar el fetcher
     fetcher = NBADataFetcher()
@@ -517,6 +819,12 @@ def main():
                 print(f"🔄 Procesando datos...")
                 processed_games = fetcher.process_games_data(games, team_stats)
                 if processed_games is not None and not processed_games.empty:
+                    # Calcular días de descanso y B2B
+                    processed_games = fetcher.calculate_rest_days_and_b2b(processed_games)
+                    
+                    # Calcular distancias de viaje
+                    processed_games = fetcher.calculate_travel_distances(processed_games)
+                    
                     all_games.append(processed_games)
                     print(f"✅ Datos procesados: {len(processed_games)} partidos")
             
