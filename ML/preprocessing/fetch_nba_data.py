@@ -192,9 +192,27 @@ class NBADataFetcher:
             suffixes=('', '_y')
         )
         
+        # Función para convertir SEASON_ID a año de temporada
+        def get_season_year(season_id):
+            # Los primeros dos dígitos indican el tipo de temporada (2=regular, 4=playoffs)
+            # Los últimos cuatro dígitos son el año de inicio (ej: 2018 para 2018-19)
+            season_type = int(str(season_id)[0])
+            year = int(str(season_id)[1:])
+            return year, 'Playoffs' if season_type == 4 else 'Regular Season'
+            
+        # Aplicar la función a SEASON_ID
+        season_info = merged['SEASON_ID'].apply(get_season_year)
+        merged['SEASON'] = season_info.apply(lambda x: x[0])
+        merged['SEASON_TYPE'] = season_info.apply(lambda x: x[1])
+        
+        # Formatear la temporada como YYYY-YY (ej: 2018-19)
+        merged['SEASON_STR'] = merged['SEASON'].apply(
+            lambda y: f"{y}-{str(y+1)[-2:]}"
+        )
+        
         # Seleccionar columnas relevantes
         final_columns = [
-            'GAME_ID', 'GAME_DATE', 'SEASON_ID',
+            'GAME_ID', 'GAME_DATE', 'SEASON', 'SEASON_STR', 'SEASON_ID',
             'TEAM_ID_HOME', 'TEAM_ABBREVIATION_HOME', 'PTS_HOME', 'WL_HOME',
             'TEAM_ID_AWAY', 'TEAM_ABBREVIATION_AWAY', 'PTS_AWAY', 'WL_AWAY'
         ]
