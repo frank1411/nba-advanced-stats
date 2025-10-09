@@ -1,0 +1,47 @@
+{
+  "test_season": 2024,
+  "n_games": 1309,
+  "points_metrics": {
+    "home": {
+      "mae": 9.0378960821078,
+      "rmse": 11.353638609845266,
+      "mean_actual": 114.48051948051948,
+      "mean_pred": 114.59557329662847
+    },
+    "away": {
+      "mae": 9.328894102620499,
+      "rmse": 11.75285643293012,
+      "mean_actual": 112.53628724216959,
+      "mean_pred": 111.81015806236653
+    }
+  },
+  "win_metrics": {
+    "mae": 6.830055371346152,
+    "rmse": 8.38235804866843,
+    "mean_actual": 0.5462184873949579,
+    "mean_pred": 2.785415234261955,
+    "accuracy": 0.6638655462184874,
+    "true_positives": 537,
+    "true_negatives": 332,
+    "false_positives": 262,
+    "false_negatives": 178,
+    "precision": 0.672090112640801,
+    "recall": 0.7510489510489511,
+    "f1_score": 0.7093791281373845
+  },
+  "accuracy_by_confidence": {
+    "Baja confianza": {
+      "n_games": 355,
+      "accuracy": 0.6957746478873239
+    },
+    "Media confianza": {
+      "n_games": 325,
+      "accuracy": 0.5353846153846153
+    },
+    "Alta confianza": {
+      "n_games": 629,
+      "accuracy": 0.712241653418124
+    }
+  },
+  "overall_accuracy": 0.6638655462184874
+}
