@@ -35,9 +35,18 @@ Una herramienta completa para el análisis de datos avanzados de la NBA, incluye
 
 ## 🏀 Uso
 
-### 1. Ejecutar el pipeline completo
+### 1. Ejecución Programada (GitHub Actions)
 
-Para ejecutar todo el flujo de procesamiento (descarga de datos + generación de características):
+El sistema está configurado para ejecutarse automáticamente todos los días a las 10:00 AM (hora de Venezuela, UTC-4) a partir del 20 de octubre de 2025. Las predicciones se generarán automáticamente y estarán disponibles en la sección de "Artifacts" de GitHub Actions.
+
+Para ver las ejecuciones programadas y los resultados:
+1. Ve a la pestaña "Actions" en tu repositorio de GitHub
+2. Selecciona el workflow "Ejecución Diaria de Predicciones NBA"
+3. Revisa las ejecuciones más recientes y sus resultados
+
+### 2. Ejecución Manual
+
+Para ejecutar manualmente el pipeline completo (descarga de datos + generación de características):
 
 ```bash
 python run_pipeline.py

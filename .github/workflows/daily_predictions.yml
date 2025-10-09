@@ -1,0 +1,62 @@
+name: Ejecución Diaria de Predicciones NBA
+
+on:
+  schedule:
+    # Se ejecuta todos los días a las 10:00 AM (hora de Venezuela, UTC-4)
+    # Se activará por primera vez el 20 de octubre de 2025 a las 10:00 AM
+    - cron: '0 14 * * *'  # 14:00 UTC = 10:00 AM Venezuela (UTC-4)
+  workflow_dispatch:  # Permite ejecución manual desde la interfaz de GitHub
+
+jobs:
+  generate-predictions:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout del código
+      uses: actions/checkout@v4
+    
+    - name: Configurar Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+    
+    - name: Instalar dependencias
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Ejecutar pipeline de predicción
+      run: |
+        echo "Ejecutando pipeline de predicción..."
+        python scripts/run_pipeline.py --predict
+        
+        # Crear directorio para predicciones
+        mkdir -p predictions
+        
+        # Copiar archivos de predicción si existen
+        if [ -d "ML/data/predictions" ]; then
+          cp ML/data/predictions/*.csv predictions/ 2>/dev/null || echo "No se encontraron archivos de predicción"
+        else
+          echo "No se encontró el directorio de predicciones"
+        fi
+    
+    - name: Subir predicciones
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: nba-predictions
+        path: predictions/
+        if-no-files-found: ignore
+        retention-days: 7
+    
+    - name: Notificar en caso de error
+      if: failure()
+      uses: rtCamp/action-slack-notify@v2
+      env:
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        SLACK_CHANNEL: nba-predictions
+        SLACK_TITLE: "Error en el pipeline de predicciones NBA"
+        SLACK_MESSAGE: "Falló la ejecución del pipeline de predicciones NBA. Por favor revisa los logs."
+        SLACK_COLOR: "#FF0000"
+      continue-on-error: true  # Continuar incluso si falla la notificación

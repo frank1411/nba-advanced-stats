@@ -366,6 +366,79 @@ def prepare_prediction_features(upcoming_games: pd.DataFrame, historical_data: p
         logger.error(f"Error al generar características: {str(e)}", exc_info=True)
         return pd.DataFrame()
 
+def generate_markdown_predictions(predictions_df: pd.DataFrame, output_dir: Path) -> None:
+    """
+    Genera un archivo Markdown con las predicciones formateadas.
+    
+    Args:
+        predictions_df: DataFrame con las predicciones
+        output_dir: Directorio de salida para el archivo
+    """
+    try:
+        # Crear copia para no modificar el DataFrame original
+        df = predictions_df.copy()
+        
+        # Ordenar por diferencia de puntos (de mayor a menor)
+        df['PRED_POINT_DIFF_ABS'] = df['PRED_POINT_DIFF'].abs()
+        df_sorted = df.sort_values(['GAME_DATE', 'PRED_POINT_DIFF_ABS'], ascending=[True, False])
+        
+        # Formatear fechas
+        df_sorted['GAME_DATE'] = pd.to_datetime(df_sorted['GAME_DATE']).dt.strftime('%d/%m/%Y')
+        
+        # Crear contenido Markdown
+        md_content = "# 🏀 Predicciones NBA - {}\n\n".format(
+            datetime.now().strftime('%d/%m/%Y %H:%M')
+        )
+        
+        # Agrupar por fecha
+        for date, group in df_sorted.groupby('GAME_DATE'):
+            md_content += f"## 📅 {date}\n\n"
+            
+            # Ordenar por probabilidad de victoria local (de mayor a menor)
+            group = group.sort_values('IMPLIED_HOME_WIN_PROB', ascending=False)
+            
+            for _, row in group.iterrows():
+                home_team = row['HOME_TEAM']
+                away_team = row['AWAY_TEAM']
+                home_pts = round(row['PRED_PTS_HOME'], 1)
+                away_pts = round(row['PRED_PTS_AWAY'], 1)
+                prob = row['IMPLIED_HOME_WIN_PROB'] * 100
+                diff = row['PRED_POINT_DIFF_ABS']
+                
+                # Determinar si es favorito local o visitante
+                if row['PRED_POINT_DIFF'] > 0:
+                    favorite = f"**{home_team}**"
+                    underdog = away_team
+                    favorite_pts = home_pts
+                    underdog_pts = away_pts
+                else:
+                    favorite = f"**{away_team}**"
+                    underdog = home_team
+                    favorite_pts = away_pts
+                    underdog_pts = home_pts
+                
+                # Añadir partido al markdown
+                md_content += (
+                    f"### 🏆 {home_team} vs {away_team}\n"
+                    f"- **Predicción**: {favorite} {favorite_pts} - {underdog_pts} {underdog}\n"
+                    f"- **Diferencial**: {abs(row['PRED_POINT_DIFF']):.1f} puntos\n"
+                    f"- **Prob. victoria local**: {prob:.1f}%\n"
+                    f"- **Confianza**: {'Alta' if diff > 8 else 'Media' if diff > 4 else 'Baja'}\n\n"
+                )
+            
+            md_content += "---\n\n"
+        
+        # Guardar archivo
+        output_path = output_dir / f"predictions_{datetime.now().strftime('%Y%m%d')}.md"
+        with open(output_path, 'w') as f:
+            f.write(md_content)
+            
+        logger.info(f"Archivo de predicciones guardado en: {output_path}")
+        
+    except Exception as e:
+        logger.error(f"Error al generar archivo Markdown: {str(e)}")
+        raise
+
 def generate_predictions() -> pd.DataFrame:
     """
     Generar predicciones para los próximos partidos.
@@ -479,11 +552,17 @@ def generate_predictions() -> pd.DataFrame:
         predictions_df = upcoming[output_cols].copy()
         
         # Guardar predicciones
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_path = PREDICTIONS_DIR / f"predictions_{timestamp}.csv"
-        predictions_df.to_csv(output_path, index=False)
+        predictions_dir = DATA_DIR / "predictions"
+        predictions_dir.mkdir(exist_ok=True)
         
-        logger.info(f"✅ Predicciones guardadas en {output_path}")
+        # Guardar CSV
+        output_file = predictions_dir / f"predictions_{datetime.now().strftime('%Y%m%d')}.csv"
+        upcoming.to_csv(output_file, index=False)
+        logger.info(f"Predicciones guardadas en {output_file}")
+        
+        # Generar archivo Markdown
+        generate_markdown_predictions(predictions_df, predictions_dir)
+        
         return predictions_df
         
     except Exception as e:
@@ -500,6 +579,13 @@ if __name__ == "__main__":
             logging.StreamHandler()
         ]
     )
-    
-    # Generar predicciones
-    generate_predictions()
+
+    # Ejecutar generación de predicciones
+    try:
+        predictions = generate_predictions()
+        print("\nPredicciones generadas exitosamente!")
+        print(predictions[['GAME_DATE', 'HOME_TEAM', 'AWAY_TEAM', 
+                         'PRED_PTS_HOME', 'PRED_PTS_AWAY', 'PRED_WINNER']])
+    except Exception as e:
+        logger.error(f"Error al ejecutar el script: {str(e)}")
+        sys.exit(1)
