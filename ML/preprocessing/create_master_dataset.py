@@ -71,6 +71,11 @@ class MasterDatasetCreator:
         self.update_team_schedule(game['TEAM_ID_HOME'], game_date)
         self.update_team_schedule(game['TEAM_ID_AWAY'], game_date)
         
+        # Agregar todas las características del juego original al diccionario
+        for col in game.index:
+            if col not in features:  # No sobrescribir las características que ya hemos creado
+                features[col] = game[col]
+        
         return pd.Series(features)
     
     def create_dataset(self):
@@ -92,11 +97,19 @@ class MasterDatasetCreator:
         master_df = pd.DataFrame(features_list)
         
         # Calcular características diferenciales
-        master_df['diff_off_rating'] = master_df['L_off_rating_L10'] - master_df['V_def_rating_L10']
-        master_df['diff_def_rating'] = master_df['V_off_rating_L10'] - master_df['L_def_rating_L10']
-        master_df['diff_pace'] = master_df['L_pace_L10'] - master_df['V_pace_L10']
-        master_df['diff_efg_pct'] = master_df['L_efg_pct_L10'] - master_df['V_efg_pct_L10']
+        # Usamos las columnas originales del DataFrame
+        master_df['diff_off_rating'] = master_df['OFF_RATING_HOME'] - master_df['DEF_RATING_AWAY']
+        master_df['diff_def_rating'] = master_df['OFF_RATING_AWAY'] - master_df['DEF_RATING_HOME']
+        master_df['diff_pace'] = master_df['PACE_HOME'] - master_df['PACE_AWAY']
+        master_df['diff_net_rating'] = master_df['NET_RATING_HOME'] - master_df['NET_RATING_AWAY']
         master_df['diff_descanso'] = master_df['L_dias_descanso'] - master_df['V_dias_descanso']
+        
+        # Agregar columnas de tendencias que ya están en los datos
+        master_df['home_trend_off'] = master_df['HOME_TREND_OFF']
+        master_df['home_trend_def'] = master_df['HOME_TREND_DEF']
+        master_df['away_trend_off'] = master_df['AWAY_TREND_OFF']
+        master_df['away_trend_def'] = master_df['AWAY_TREND_DEF']
+        master_df['net_efficiency_diff'] = master_df['NET_EFFICIENCY_DIFF']
         
         return master_df
 

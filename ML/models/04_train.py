@@ -19,9 +19,9 @@ from sklearn.model_selection import train_test_split
 logger = logging.getLogger(__name__)
 
 # Configuración de rutas
-BASE_DIR = Path(__file__).parents[2]
+BASE_DIR = Path(__file__).parents[1]  # Subimos un nivel menos
 MODELS_DIR = BASE_DIR / "models"
-DATA_DIR = BASE_DIR.parent / "data"  # Ajustar según la estructura de directorios
+DATA_DIR = BASE_DIR / "data"  # Ahora apunta a ML/data
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 
 # Asegurar que los directorios existan
@@ -161,6 +161,23 @@ def train_models(X: pd.DataFrame, y: pd.DataFrame, test_size: float = 0.2,
         }
     }
 
+def convert_numpy_types(obj):
+    """
+    Convierte tipos de datos NumPy a tipos nativos de Python para serialización JSON.
+    """
+    import numpy as np
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: convert_numpy_types(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    return obj
+
 def save_models_and_metadata(models: Dict, metadata: Dict, output_dir: Path) -> None:
     """
     Guardar modelos y metadatos en disco.
@@ -179,12 +196,31 @@ def save_models_and_metadata(models: Dict, metadata: Dict, output_dir: Path) -> 
         joblib.dump(model, model_path)
         logger.info(f"Modelo guardado en {model_path}")
     
+    # Convertir tipos NumPy a tipos nativos de Python
+    metadata_serializable = convert_numpy_types(metadata)
+    
     # Guardar metadatos
     metadata_path = output_dir / "training_metadata.json"
     with open(metadata_path, 'w') as f:
-        json.dump(metadata, f, indent=2)
+        json.dump(metadata_serializable, f, indent=2)
     
     logger.info(f"Metadatos guardados en {metadata_path}")
+    
+    # Guardar métricas de rendimiento en un archivo separado para facilitar la lectura
+    metrics_path = output_dir / "model_metrics.txt"
+    with open(metrics_path, 'w') as f:
+        f.write("Métricas de rendimiento de los modelos:\n")
+        f.write("=" * 50 + "\n\n")
+        
+        for target, metrics in metadata_serializable.get('metrics', {}).items():
+            f.write(f"Modelo: {target}\n")
+            f.write(f"- Error Absoluto Medio (MAE): {metrics.get('mae', 'N/A'):.2f}\n")
+            f.write(f"- Raíz del Error Cuadrático Medio (RMSE): {metrics.get('rmse', 'N/A'):.2f}\n")
+            f.write(f"- R² Score: {metrics.get('r2', 'N/A'):.4f}\n")
+            f.write(f"- Muestras de entrenamiento: {metrics.get('n_samples_train', 'N/A'):,}\n")
+            f.write(f"- Muestras de prueba: {metrics.get('n_samples_test', 'N/A'):,}\n\n")
+    
+    logger.info(f"Métricas detalladas guardadas en {metrics_path}")
 
 def train_model(test_season: int = 2025) -> None:
     """

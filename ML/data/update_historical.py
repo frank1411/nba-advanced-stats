@@ -49,10 +49,57 @@ def fetch_season_games(season: int) -> pd.DataFrame:
     Returns:
         pd.DataFrame con los datos de los partidos
     """
-    # TODO: Implementar la obtención de datos de la API de la NBA
-    # Por ahora, devolvemos un DataFrame vacío
-    logger.warning(f"Función fetch_season_games no implementada. Temporada: {season}")
-    return pd.DataFrame()
+    try:
+        logger.info(f"Obteniendo datos para la temporada {season}")
+        
+        # Importar la clase NBADataFetcher
+        import sys
+        from pathlib import Path
+        
+        # Asegurarse de que el directorio padre esté en el path
+        parent_dir = str(Path(__file__).parents[2])
+        if parent_dir not in sys.path:
+            sys.path.append(parent_dir)
+            
+        from ML.preprocessing.fetch_nba_data import NBADataFetcher
+        
+        # Crear instancia del fetcher
+        fetcher = NBADataFetcher()
+        
+        # Formatear la temporada (ej: 2023 -> '2022-23')
+        season_str = f"{season-1}-{str(season)[-2:]}"
+        
+        # Lista para almacenar todos los partidos de la temporada
+        all_games = []
+        
+        # Obtener partidos de temporada regular y playoffs
+        for season_type in ['Regular Season', 'Playoffs']:
+            logger.info(f"  - Procesando {season_str} - {season_type}...")
+            
+            # Obtener estadísticas de equipo
+            team_stats = fetcher.get_team_stats(season_str, season_type)
+            
+            # Obtener partidos
+            games = fetcher.get_season_games(season_str, season_type)
+            
+            if games is not None and not games.empty:
+                # Procesar los datos
+                processed_games = fetcher.process_games_data(games, team_stats)
+                if processed_games is not None and not processed_games.empty:
+                    # Calcular días de descanso y B2B
+                    processed_games = fetcher.calculate_rest_days_and_b2b(processed_games)
+                    # Calcular distancias de viaje
+                    processed_games = fetcher.calculate_travel_distances(processed_games)
+                    all_games.append(processed_games)
+        
+        # Combinar todos los partidos de la temporada
+        if all_games:
+            return pd.concat(all_games, ignore_index=True)
+        return pd.DataFrame()
+        
+    except Exception as e:
+        logger.error(f"Error al obtener datos para la temporada {season}: {str(e)}")
+        return pd.DataFrame()
 
 def preprocess_games(df: pd.DataFrame) -> pd.DataFrame:
     """

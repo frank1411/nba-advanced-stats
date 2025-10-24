@@ -1,18 +1,25 @@
 {
-  "fecha_creacion": "2025-10-08T19:09:32.662624",
-  "num_partidos": 2621,
+  "fecha_creacion": "2025-10-24T10:18:59.985433",
+  "num_partidos": 8887,
   "temporadas": [
-    2023,
-    2024
+    2018.0,
+    2019.0,
+    2020.0,
+    2021.0,
+    2021.0549983094782,
+    2022.0,
+    2023.0,
+    2024.0,
+    2025.0
   ],
   "equipos_locales": 30,
   "equipos_visitantes": 30,
   "rango_fechas": {
-    "inicio": "2023-10-24",
-    "fin": "2025-06-22"
+    "inicio": "2018-10-16",
+    "fin": "2025-10-23"
   },
   "columnas": {
-    "total": 95,
+    "total": 121,
     "categorias": {
       "identificadores": [
         "GAME_ID",

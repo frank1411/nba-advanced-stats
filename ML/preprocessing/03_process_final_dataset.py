@@ -130,7 +130,10 @@ class NBAFinalProcessor:
             elif feat == 'IS_B2B':
                 # Para B2B, codificamos como 1 si el local está en B2B y el visitante no, -1 si es al revés, 0 si ambos o ninguno
                 if 'IS_B2B_HOME' in df.columns and 'IS_B2B_AWAY' in df.columns:
-                    df['B2B_ADVANTAGE'] = df['IS_B2B_HOME'].astype(int) - df['IS_B2B_AWAY'].astype(int)
+                    # Rellenar valores nulos con 0 antes de la conversión a enteros
+                    df['IS_B2B_HOME'] = df['IS_B2B_HOME'].fillna(0).astype(int)
+                    df['IS_B2B_AWAY'] = df['IS_B2B_AWAY'].fillna(0).astype(int)
+                    df['B2B_ADVANTAGE'] = df['IS_B2B_HOME'] - df['IS_B2B_AWAY']
         
         # 4. Características de tendencia (últimos 5 partidos vs. temporada completa)
         for metric in ['OFF_RATING', 'DEF_RATING', 'NET_RATING', 'PACE']:

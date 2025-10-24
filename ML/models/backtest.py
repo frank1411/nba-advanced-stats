@@ -36,7 +36,7 @@ def load_data(input_path: str) -> pd.DataFrame:
     # Asegurarse de que las columnas necesarias existen
     required_cols = [
         'GAME_DATE', 'SEASON', 'SEASON_TYPE', 'TEAM_ABBREVIATION_HOME', 'TEAM_ABBREVIATION_AWAY',
-        'PTS_HOME', 'PTS_AWAY', 'TARGET'
+        'PTS_HOME', 'PTS_AWAY', 'TARGET', 'HOME_POINT_DIFF', 'AWAY_POINT_DIFF', 'POINT_DIFF'
     ]
     
     missing_cols = [col for col in required_cols if col not in df.columns]

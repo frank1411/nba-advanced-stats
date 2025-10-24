@@ -797,7 +797,7 @@ def main():
     
     # Temporadas a procesar
     start_year = 2018
-    end_year = 2025
+    end_year = 2025  # Incluir hasta la temporada 2025-26
     
     # Procesar cada temporada
     for year in range(start_year, end_year + 1):
@@ -836,7 +836,7 @@ def main():
         df = pd.concat(all_games, ignore_index=True)
         
         # Guardar los datos
-        output_dir = Path("ML/data/raw")
+        output_dir = Path(__file__).parent.parent / "data" / "raw"
         output_dir.mkdir(parents=True, exist_ok=True)
         output_path = output_dir / "nba_games_raw.parquet"
         df.to_parquet(output_path, index=False)
