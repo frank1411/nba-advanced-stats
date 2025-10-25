@@ -56,10 +56,17 @@ jobs:
         echo "Procesando conjunto de datos final..."
         python ML/preprocessing/03_process_final_dataset.py
     
+    - name: Verificar archivos de modelo
+      run: |
+        echo "🔍 Verificando archivos de modelo..."
+        python ML/verify_models.py
+        echo "✅ Verificación de archivos completada"
+    
     - name: Generar predicciones
       run: |
-        echo "Generando predicciones..."
+        echo "🔮 Generando predicciones..."
         python ML/models/06_predict_upcoming_games.py
+        echo "✅ Predicciones generadas exitosamente"
     
     - name: Commit y Push de los cambios
       if: success()
