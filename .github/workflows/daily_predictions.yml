@@ -77,9 +77,15 @@ jobs:
           echo "No se encontró el directorio de predicciones"
         fi
     
+    - name: Crear directorio de predicciones si no existe
+      if: always()
+      run: |
+        mkdir -p predictions
+        echo "Directorio de predicciones listo"
+    
     - name: Subir predicciones
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: nba-predictions
         path: predictions/
