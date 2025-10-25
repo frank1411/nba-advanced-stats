@@ -73,11 +73,17 @@ jobs:
       run: |
         git config --global user.name 'GitHub Actions'
         git config --global user.email 'actions@github.com'
-        git add ML/data/processed/*
+        # Forzar la adición de archivos necesarios
+        git add -f ML/data/processed/nba_games_final.*
+        git add -f ML/data/processed/.gitkeep
         git add ML/data/predictions/*
-        git diff --quiet && git diff --staged --quiet || 
-          (git commit -m "[Automated] Actualización de datos y predicciones NBA" && 
-           git push https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:desa)
+        # Verificar si hay cambios para hacer commit
+        if git diff --cached --quiet; then
+          echo "No hay cambios para hacer commit"
+        else
+          git commit -m "[Automated] Actualización de datos y predicciones NBA"
+          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:desa
+        fi
         if [ -d "ML/data/predictions" ]; then
           cp ML/data/predictions/*.csv predictions/ 2>/dev/null || echo "No se encontraron archivos de predicción"
         else
