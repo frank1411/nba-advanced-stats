@@ -1,4 +1,10 @@
-name: NBA Daily Pipeline
+name: NBA Daily Predictions
+
+# Configuración de permisos para el token de GitHub
+permissions:
+  contents: write  # Permiso para hacer push a la rama
+  pull-requests: write  # Permiso para actualizar PRs
+  statuses: write  # Permiso para actualizar estados
 
 on:
   schedule:
@@ -68,19 +74,23 @@ jobs:
         python ML/models/06_predict_upcoming_games.py
         echo "✅ Predicciones generadas exitosamente"
     
-    - name: Commit y Push de los cambios
-      if: success()
+    - name: Configurar Git
       run: |
         git config --global user.name 'GitHub Actions'
         git config --global user.email 'actions@github.com'
-        
+        # Configurar el token de acceso (usando el token de GitHub Actions)
+        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+    
+    - name: Verificar cambios
+      id: check_changes
+      run: |
         # Asegurar que los directorios existen
         mkdir -p ML/data/processed ML/data/predictions
         
-        # Forzar la adición de archivos necesarios
-        git add -f ML/data/processed/nba_games_final.*
-        git add -f ML/data/processed/.gitkeep
-        git add -f ML/data/predictions/.gitkeep
+        # Agregar archivos al staging
+        git add -f ML/data/processed/nba_games_final.* 2>/dev/null || true
+        git add -f ML/data/processed/.gitkeep 2>/dev/null || true
+        git add -f ML/data/predictions/.gitkeep 2>/dev/null || true
         
         # Agregar archivos de predicción
         if [ -d "ML/data/predictions" ]; then
@@ -91,20 +101,32 @@ jobs:
           # Agregar archivos de predicción al commit
           for file in ML/data/predictions/*.csv; do
             if [ -f "$file" ]; then
-              git add -f "$file"
+              git add -f "$file" 2>/dev/null || true
             fi
           done
         else
           echo "No se encontró el directorio de predicciones"
         fi
         
-        # Verificar si hay cambios para hacer commit
+        # Verificar si hay cambios
         if [ -n "$(git status --porcelain)" ]; then
-          git commit -m "[Automated] Actualización de datos y predicciones NBA"
-          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:desa
+          echo "changes=true" >> $GITHUB_OUTPUT
         else
           echo "No hay cambios para hacer commit"
+          echo "changes=false" >> $GITHUB_OUTPUT
         fi
+    
+    - name: Hacer commit y push
+      if: steps.check_changes.outputs.changes == 'true'
+      run: |
+        git commit -m "[Automated] Actualización de datos y predicciones NBA"
+        git push origin desa
+        echo "✅ Cambios subidos correctamente"
+      env:
+        GIT_AUTHOR_NAME: GitHub Actions
+        GIT_COMMITTER_NAME: GitHub Actions
+        GIT_AUTHOR_EMAIL: actions@github.com
+        GIT_COMMITTER_EMAIL: actions@github.com
     
     - name: Crear directorio de predicciones si no existe
       if: always()
