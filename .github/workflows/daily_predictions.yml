@@ -1,19 +1,32 @@
-name: Ejecución Diaria de Predicciones NBA
+name: NBA Daily Pipeline
 
 on:
   schedule:
-    # Se ejecuta todos los días a las 10:00 AM (hora de Venezuela, UTC-4)
-    # Se activará por primera vez el 20 de octubre de 2025 a las 10:00 AM
-    - cron: '0 14 * * *'  # 14:00 UTC = 10:00 AM Venezuela (UTC-4)
+    # Se ejecuta todos los días a las 9:00 AM (hora de Venezuela, UTC-4)
+    # Formato: minuto hora * * día-del-mes mes día-de-la-semana
+    - cron: '0 13 * * *'  # 13:00 UTC = 9:00 AM Venezuela (UTC-4)
   workflow_dispatch:  # Permite ejecución manual desde la interfaz de GitHub
+  push:
+    branches:
+      - desa
+    paths:
+      - '.github/workflows/daily_predictions.yml'
+      - 'ML/**'  # Se activa con cambios en cualquier archivo de la carpeta ML
+  pull_request:
+    branches:
+      - desa
 
 jobs:
-  generate-predictions:
+  nba-pipeline:
+    # Solo ejecutar en la rama desa
+    if: github.ref == 'refs/heads/desa'
     runs-on: ubuntu-latest
     
     steps:
     - name: Checkout del código
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     
     - name: Configurar Python
       uses: actions/setup-python@v4
@@ -25,16 +38,39 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install pandas pyarrow scikit-learn requests python-dateutil
     
-    - name: Ejecutar pipeline de predicción
+    - name: Limpiar carpeta de predicciones
       run: |
-        echo "Ejecutando pipeline de predicción..."
-        python scripts/run_pipeline.py --predict
-        
-        # Crear directorio para predicciones
-        mkdir -p predictions
-        
-        # Copiar archivos de predicción si existen
+        rm -rf ML/data/predictions/*
+        mkdir -p ML/data/predictions
+        echo "Carpeta de predicciones limpiada correctamente"
+    
+    - name: Ejecutar actualización de datos de la NBA
+      run: |
+        echo "Ejecutando actualización de datos..."
+        python ML/preprocessing/02_update_nba_data.py
+    
+    - name: Procesar conjunto de datos final
+      run: |
+        echo "Procesando conjunto de datos final..."
+        python ML/preprocessing/03_process_final_dataset.py
+    
+    - name: Generar predicciones
+      run: |
+        echo "Generando predicciones..."
+        python ML/models/06_predict_upcoming_games.py
+    
+    - name: Commit y Push de los cambios
+      if: success()
+      run: |
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'actions@github.com'
+        git add ML/data/processed/*
+        git add ML/data/predictions/*
+        git diff --quiet && git diff --staged --quiet || 
+          (git commit -m "[Automated] Actualización de datos y predicciones NBA" && 
+           git push https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:desa)
         if [ -d "ML/data/predictions" ]; then
           cp ML/data/predictions/*.csv predictions/ 2>/dev/null || echo "No se encontraron archivos de predicción"
         else
