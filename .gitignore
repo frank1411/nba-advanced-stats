@@ -50,10 +50,16 @@ data/processed/*
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
 
-# Logs y resultados
+# Logs
 logs/
 *.log
+
+# Predictions - Solo permitir archivos específicos
 output/predictions/
+data/predictions/*
+!data/predictions/.gitkeep
+!data/predictions/predictions_*.csv
+!ML/data/predictions/predictions_*.csv
 
 # Archivos temporales
 *.tmp

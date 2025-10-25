@@ -73,21 +73,37 @@ jobs:
       run: |
         git config --global user.name 'GitHub Actions'
         git config --global user.email 'actions@github.com'
+        
+        # Asegurar que los directorios existen
+        mkdir -p ML/data/processed ML/data/predictions
+        
         # Forzar la adición de archivos necesarios
         git add -f ML/data/processed/nba_games_final.*
         git add -f ML/data/processed/.gitkeep
-        git add ML/data/predictions/*
-        # Verificar si hay cambios para hacer commit
-        if git diff --cached --quiet; then
-          echo "No hay cambios para hacer commit"
-        else
-          git commit -m "[Automated] Actualización de datos y predicciones NBA"
-          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:desa
-        fi
+        git add -f ML/data/predictions/.gitkeep
+        
+        # Agregar archivos de predicción
         if [ -d "ML/data/predictions" ]; then
+          # Copiar archivos de predicción para el artefacto
+          mkdir -p predictions
           cp ML/data/predictions/*.csv predictions/ 2>/dev/null || echo "No se encontraron archivos de predicción"
+          
+          # Agregar archivos de predicción al commit
+          for file in ML/data/predictions/*.csv; do
+            if [ -f "$file" ]; then
+              git add -f "$file"
+            fi
+          done
         else
           echo "No se encontró el directorio de predicciones"
+        fi
+        
+        # Verificar si hay cambios para hacer commit
+        if [ -n "$(git status --porcelain)" ]; then
+          git commit -m "[Automated] Actualización de datos y predicciones NBA"
+          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:desa
+        else
+          echo "No hay cambios para hacer commit"
         fi
     
     - name: Crear directorio de predicciones si no existe
