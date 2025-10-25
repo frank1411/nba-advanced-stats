@@ -92,13 +92,14 @@ jobs:
         if-no-files-found: ignore
         retention-days: 7
     
-    - name: Notificar en caso de error
-      if: failure()
-      uses: rtCamp/action-slack-notify@v2
-      env:
-        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-        SLACK_CHANNEL: nba-predictions
-        SLACK_TITLE: "Error en el pipeline de predicciones NBA"
-        SLACK_MESSAGE: "Falló la ejecución del pipeline de predicciones NBA. Por favor revisa los logs."
-        SLACK_COLOR: "#FF0000"
-      continue-on-error: true  # Continuar incluso si falla la notificación
+    # Sección de notificaciones deshabilitada - Configuración de Slack requerida
+    # - name: Notificar en caso de error
+    #   if: failure()
+    #   uses: rtCamp/action-slack-notify@v2
+    #   env:
+    #     SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+    #     SLACK_CHANNEL: nba-predictions
+    #     SLACK_TITLE: "Error en el pipeline de predicciones NBA"
+    #     SLACK_MESSAGE: "Falló la ejecución del pipeline de predicciones NBA. Por favor revisa los logs."
+    #     SLACK_COLOR: "#FF0000"
+    #   continue-on-error: true  # Continuar incluso si falla la notificación
