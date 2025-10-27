@@ -181,45 +181,27 @@ jobs:
         
         # Verificar si hay cambios
         if [ -n "$(git status --porcelain)" ]; then
-          echo "changes=true" >> $GITHUB_OUTPUT
-        else
-          echo "No hay cambios para hacer commit"
-          echo "changes=false" >> $GITHUB_OUTPUT
-        fi
     
     - name: Hacer commit y push
-      if: steps.check_changes.outputs.changes == 'true'
       run: |
-        # Configurar Git
-        git config --global user.name 'GitHub Actions'
-        git config --global user.email 'actions@github.com'
+        # Crear el mensaje de commit
+        COMMIT_MSG="feat: Actualizar predicciones NBA $(date +'%Y-%m-%d')"
         
-        # Resetear cualquier cambio local para evitar conflictos
-        git reset --hard HEAD
-        git clean -fd
+        # Agregar archivos específicos
+        git add ML/data/predictions/predictions_*.{csv,md} 2>/dev/null || true
+        git add ML/data/processed/nba_games_final.* 2>/dev/null || true
         
-        # Obtener los últimos cambios del repositorio remoto
-        git fetch origin desa
-        
-        # Resetear al estado del repositorio remoto
-        git reset --hard origin/desa
-        
-        # Agregar solo los archivos necesarios
-        git add ML/data/processed/nba_games_final.*
-        
-        # Hacer commit solo si hay cambios
+        # Verificar si hay cambios para hacer commit
         if ! git diff --cached --quiet; then
-          git commit -m "[Automated] Actualización de datos y predicciones NBA $(date +'%Y-%m-%d')"
+          echo "🚀 Haciendo commit de los cambios..."
+          git commit -m "$COMMIT_MSG"
           
-          # Hacer push forzado para evitar conflictos
-          git push origin desa || {
-            echo "⚠️ Falló el push. Reintentando..."
-            git pull --rebase origin desa
-            git push origin desa || exit 1
-          }
+          echo "🚀 Haciendo push a la rama desa..."
+          git push origin desa
           echo "✅ Cambios subidos correctamente"
         else
           echo "ℹ️ No hay cambios para hacer commit"
+          exit 0
         fi
         
         echo "✅ Cambios subidos correctamente"
