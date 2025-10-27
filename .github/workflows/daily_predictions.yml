@@ -57,16 +57,22 @@ jobs:
     - name: Limpiar carpeta de predicciones
       run: |
         echo "🔍 Contenido de la carpeta de predicciones antes de limpiar:"
-        ls -la ML/data/predictions/ || true
+        ls -la ML/data/predictions/ 2>/dev/null || true
         
-        # Asegurarse de que el directorio existe
+        # Asegurarse de que el directorio existe y tiene permisos
         mkdir -p ML/data/predictions
+        chmod -R 777 ML/data/predictions
         
-        # Eliminar todo el contenido excepto .gitkeep
-        find ML/data/predictions/ -mindepth 1 ! -name '.gitkeep' -exec rm -rf {} + 2>/dev/null || true
+        # Eliminar archivos antiguos (más de 1 día)
+        echo "🧹 Eliminando archivos antiguos..."
+        find ML/data/predictions/ -type f -mtime +1 -exec rm -f {} \; 2>/dev/null || true
+        
+        # Limpiar archivos de predicciones del día actual
+        TODAY=$(date +%Y%m%d)
+        rm -f ML/data/predictions/predictions_${TODAY}.* 2>/dev/null || true
         
         echo "✅ Contenido de la carpeta después de limpiar:"
-        ls -la ML/data/predictions/ || true
+        ls -la ML/data/predictions/ 2>/dev/null || true
         echo "🗑️  Carpeta de predicciones limpiada correctamente"
     
     - name: Ejecutar actualización de datos de la NBA
@@ -150,16 +156,27 @@ jobs:
         if [ -d "ML/data/predictions" ]; then
           # Copiar archivos de predicción para el artefacto
           mkdir -p predictions
-          cp ML/data/predictions/*.csv predictions/ 2>/dev/null || echo "No se encontraron archivos de predicción"
+          
+          # Asegurar que los archivos tengan permisos de lectura
+          chmod -R 644 ML/data/predictions/* 2>/dev/null || true
+          
+          # Copiar tanto CSV como MD para el artefacto
+          cp ML/data/predictions/*.csv predictions/ 2>/dev/null || echo "No se encontraron archivos CSV de predicción"
+          cp ML/data/predictions/*.md predictions/ 2>/dev/null || echo "No se encontraron archivos MD de predicción"
           
           # Agregar archivos de predicción al commit
-          for file in ML/data/predictions/*.csv; do
+          for file in ML/data/predictions/*; do
             if [ -f "$file" ]; then
-              git add -f "$file" 2>/dev/null || true
+              git add -f "$file" 2>/dev/null || echo "No se pudo agregar $file"
             fi
           done
+          
+          # Mostrar el estado de git para depuración
+          echo "📊 Estado actual de git:"
+          git status --porcelain ML/data/predictions/ || true
         else
-          echo "No se encontró el directorio de predicciones"
+          echo "❌ No se encontró el directorio de predicciones"
+          exit 1
         fi
         
         # Verificar si hay cambios
