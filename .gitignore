@@ -59,7 +59,8 @@ output/predictions/
 data/predictions/*
 !data/predictions/.gitkeep
 !data/predictions/predictions_*.csv
-!ML/data/predictions/predictions_*.csv
+!data/predictions/predictions_*.md
+!ML/data/predictions/.gitkeep
 
 # Archivos temporales
 *.tmp

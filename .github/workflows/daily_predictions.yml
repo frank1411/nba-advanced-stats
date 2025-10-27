@@ -46,10 +46,17 @@ jobs:
         pip install -r requirements.txt
         pip install pandas pyarrow scikit-learn requests python-dateutil
     
+    - name: Configurar estructura de directorios
+      run: |
+        # Crear estructura de directorios necesaria
+        mkdir -p ML/data/raw ML/data/processed ML/data/predictions
+        # Asegurar que exista .gitkeep
+        touch ML/data/predictions/.gitkeep
+        echo "✅ Estructura de directorios configurada"
+    
     - name: Limpiar carpeta de predicciones
       run: |
         rm -rf ML/data/predictions/*
-        mkdir -p ML/data/predictions
         echo "Carpeta de predicciones limpiada correctamente"
     
     - name: Ejecutar actualización de datos de la NBA
@@ -87,65 +94,59 @@ jobs:
         # Asegurar que los directorios existen
         mkdir -p ML/data/processed ML/data/predictions
         
-        # Agregar archivos al staging
-        git add -f ML/data/processed/nba_games_final.* 2>/dev/null || true
-        git add -f ML/data/processed/.gitkeep 2>/dev/null || true
-        git add -f ML/data/predictions/.gitkeep 2>/dev/null || true
+        # Agregar solo los archivos necesarios al staging
+        git add ML/data/processed/nba_games_final.* 2>/dev/null || true
         
-        # Agregar archivos de predicción
-        if [ -d "ML/data/predictions" ]; then
-          # Copiar archivos de predicción para el artefacto
-          mkdir -p predictions
-          cp ML/data/predictions/*.csv predictions/ 2>/dev/null || echo "No se encontraron archivos de predicción"
-          
-          # Agregar archivos de predicción al commit
-          for file in ML/data/predictions/*.csv; do
-            if [ -f "$file" ]; then
-              git add -f "$file" 2>/dev/null || true
-            fi
-          done
-        else
-          echo "No se encontró el directorio de predicciones"
-        fi
-        
-        # Verificar si hay cambios
-        if [ -n "$(git status --porcelain)" ]; then
+        # Verificar si hay cambios en los archivos rastreados
+        if ! git diff --cached --quiet; then
+          echo "✅ Se encontraron cambios en los archivos procesados"
           echo "changes=true" >> $GITHUB_OUTPUT
         else
-          echo "No hay cambios para hacer commit"
+          echo "ℹ️ No hay cambios en los archivos procesados"
           echo "changes=false" >> $GITHUB_OUTPUT
+        fi
+        
+        # Copiar archivos de predicción para el artefacto (sin hacer commit)
+        if [ -d "ML/data/predictions" ]; then
+          mkdir -p predictions
+          cp ML/data/predictions/*.csv predictions/ 2>/dev/null || echo "No se encontraron archivos de predicción"
         fi
     
     - name: Hacer commit y push
       if: steps.check_changes.outputs.changes == 'true'
       run: |
-        # Configurar Git para hacer rebase por defecto
+        # Configurar Git
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'actions@github.com'
         git config --global pull.rebase true
         
-        # Hacer pull con rebase primero
-        git pull --rebase origin desa || {
-          echo "⚠️ Error al hacer pull. Intentando continuar..."
-          git rebase --abort 2>/dev/null || true
-          exit 1
-        }
-        
-        # Hacer commit de los cambios locales
-        git commit -m "[Automated] Actualización de datos y predicciones NBA" || {
+        # Hacer commit de los cambios
+        git commit -m "[Automated] Actualización de datos de la NBA $(date +'%Y-%m-%d')" || {
           echo "⚠️ No hay cambios para hacer commit"
           exit 0
         }
         
+        # Hacer pull con rebase antes de push
+        echo "🔄 Sincronizando con el repositorio remoto..."
+        git pull --rebase origin desa || {
+          echo "⚠️ Error al sincronizar. Reintentando..."
+          git rebase --abort 2>/dev/null || true
+          git reset --hard origin/desa
+          exit 1
+        }
+        
         # Hacer push de los cambios
+        echo "🚀 Subiendo cambios al repositorio..."
         git push origin desa || {
-          echo "⚠️ Falló el push. Haciendo pull y reintentando..."
+          echo "⚠️ Falló el push. Reintentando..."
           git pull --rebase origin desa
           git push origin desa || {
-            echo "❌ Error al hacer push después del rebase"
+            echo "❌ Error al subir los cambios"
             exit 1
           }
         }
         
-        echo "✅ Cambios subidos correctamente"
+        echo "✅ ¡Cambios subidos exitosamente!"
       env:
         GIT_AUTHOR_NAME: GitHub Actions
         GIT_COMMITTER_NAME: GitHub Actions
