@@ -119,8 +119,32 @@ jobs:
     - name: Hacer commit y push
       if: steps.check_changes.outputs.changes == 'true'
       run: |
-        git commit -m "[Automated] Actualización de datos y predicciones NBA"
-        git push origin desa
+        # Configurar Git para hacer rebase por defecto
+        git config --global pull.rebase true
+        
+        # Hacer pull con rebase primero
+        git pull --rebase origin desa || {
+          echo "⚠️ Error al hacer pull. Intentando continuar..."
+          git rebase --abort 2>/dev/null || true
+          exit 1
+        }
+        
+        # Hacer commit de los cambios locales
+        git commit -m "[Automated] Actualización de datos y predicciones NBA" || {
+          echo "⚠️ No hay cambios para hacer commit"
+          exit 0
+        }
+        
+        # Hacer push de los cambios
+        git push origin desa || {
+          echo "⚠️ Falló el push. Haciendo pull y reintentando..."
+          git pull --rebase origin desa
+          git push origin desa || {
+            echo "❌ Error al hacer push después del rebase"
+            exit 1
+          }
+        }
+        
         echo "✅ Cambios subidos correctamente"
       env:
         GIT_AUTHOR_NAME: GitHub Actions
