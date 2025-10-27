@@ -142,31 +142,37 @@ jobs:
     - name: Hacer commit y push
       if: steps.check_changes.outputs.changes == 'true'
       run: |
-        # Configurar Git para hacer rebase por defecto
-        git config --global pull.rebase true
+        # Configurar Git
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'actions@github.com'
         
-        # Hacer pull con rebase primero
-        git pull --rebase origin desa || {
-          echo "⚠️ Error al hacer pull. Intentando continuar..."
-          git rebase --abort 2>/dev/null || true
-          exit 1
-        }
+        # Resetear cualquier cambio local para evitar conflictos
+        git reset --hard HEAD
+        git clean -fd
         
-        # Hacer commit de los cambios locales
-        git commit -m "[Automated] Actualización de datos y predicciones NBA" || {
-          echo "⚠️ No hay cambios para hacer commit"
-          exit 0
-        }
+        # Obtener los últimos cambios del repositorio remoto
+        git fetch origin desa
         
-        # Hacer push de los cambios
-        git push origin desa || {
-          echo "⚠️ Falló el push. Haciendo pull y reintentando..."
-          git pull --rebase origin desa
+        # Resetear al estado del repositorio remoto
+        git reset --hard origin/desa
+        
+        # Agregar solo los archivos necesarios
+        git add ML/data/processed/nba_games_final.*
+        
+        # Hacer commit solo si hay cambios
+        if ! git diff --cached --quiet; then
+          git commit -m "[Automated] Actualización de datos y predicciones NBA $(date +'%Y-%m-%d')"
+          
+          # Hacer push forzado para evitar conflictos
           git push origin desa || {
-            echo "❌ Error al hacer push después del rebase"
-            exit 1
+            echo "⚠️ Falló el push. Reintentando..."
+            git pull --rebase origin desa
+            git push origin desa || exit 1
           }
-        }
+          echo "✅ Cambios subidos correctamente"
+        else
+          echo "ℹ️ No hay cambios para hacer commit"
+        fi
         
         echo "✅ Cambios subidos correctamente"
       env:
