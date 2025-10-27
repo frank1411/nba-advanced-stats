@@ -356,7 +356,7 @@ def get_upcoming_schedule(days_ahead: int = 7) -> pd.DataFrame:
 
 def generate_features(upcoming_games: pd.DataFrame) -> pd.DataFrame:
     """
-    Genera características para los partidos futuros.
+    Genera características para los partidos futuros utilizando datos históricos.
     
     Args:
         upcoming_games: DataFrame con los partidos programados
@@ -366,31 +366,114 @@ def generate_features(upcoming_games: pd.DataFrame) -> pd.DataFrame:
     """
     if upcoming_games.empty:
         return pd.DataFrame()
+
+    # 1. Cargar datos históricos procesados
+    processed_data_path = os.path.join('ML', 'data', 'processed', 'nba_games_final.parquet')
+    try:
+        historical_data = pd.read_parquet(processed_data_path)
+        print(f"✅ Datos históricos cargados: {len(historical_data)} partidos")
+    except Exception as e:
+        print(f"❌ Error al cargar datos históricos: {e}")
+        return pd.DataFrame()
+
+    # 2. Función para obtener estadísticas de un equipo
+    def get_team_stats(team_abbr, is_home=True):
+        prefix = 'HOME' if is_home else 'AWAY'
+        team_col = f'TEAM_ABBREVIATION_{prefix}'
+        
+        # Filtrar partidos del equipo
+        team_games = historical_data[historical_data[team_col] == team_abbr].copy()
+        if team_games.empty:
+            return {}
+            
+        # Ordenar por fecha (más reciente primero)
+        team_games = team_games.sort_values('GAME_DATE', ascending=False)
+        
+        # Obtener estadísticas
+        stats = {}
+        
+        # Estadísticas básicas
+        for col in ['PTS', 'OFF_RATING', 'DEF_RATING', 'NET_RATING', 'PACE', 'W_PCT']:
+            # Últimos 10 partidos o todos si hay menos de 10
+            last_10 = team_games.iloc[:10][f'{col}_{prefix}'].mean() if len(team_games) >= 10 else team_games[f'{col}_{prefix}'].mean()
+            stats[f'{col}_L10_{prefix}'] = last_10
+            stats[f'{col}_{prefix}'] = team_games[f'{col}_{prefix}'].mean()
+        
+        # Otras estadísticas
+        stats.update({
+            f'GP_{prefix}': team_games[f'GP_{prefix}'].iloc[0] if len(team_games) > 0 else 0,
+            f'W_{prefix}': team_games[f'W_{prefix}'].iloc[0] if len(team_games) > 0 else 0,
+            f'L_{prefix}': team_games[f'L_{prefix}'].iloc[0] if len(team_games) > 0 else 0,
+        })
+        
+        return stats
+
+    # 3. Aplicar a cada partido
+    features_list = []
+    for _, game in upcoming_games.iterrows():
+        home_team = game['TEAM_ABBREVIATION_HOME']
+        away_team = game['TEAM_ABBREVIATION_AWAY']
+        
+        home_stats = get_team_stats(home_team, is_home=True)
+        away_stats = get_team_stats(away_team, is_home=False)
+        
+        # Combinar estadísticas
+        game_features = {
+            **game.to_dict(),
+            **home_stats,
+            **away_stats
+        }
+        features_list.append(game_features)
     
-    # Hacer una copia para no modificar el DataFrame original
-    features = upcoming_games.copy()
+    if not features_list:
+        return pd.DataFrame()
+        
+    features = pd.DataFrame(features_list)
     
-    # Asegurarse de que las columnas necesarias existen
+    # 4. Calcular características diferenciales
+    for metric in ['PTS', 'OFF_RATING', 'DEF_RATING', 'NET_RATING', 'PACE', 'W_PCT']:
+        for suffix in ['', '_L10']:
+            home_col = f'{metric}{suffix}_HOME'
+            away_col = f'{metric}{suffix}_AWAY'
+            
+            if home_col in features.columns and away_col in features.columns:
+                # Diferencia absoluta
+                features[f'{metric}{suffix}_DIFF'] = features[home_col] - features[away_col]
+                
+                # Diferencia porcentual (evitar división por cero)
+                denominator = (features[home_col] + features[away_col]) / 2 + 1e-10
+                features[f'{metric}{suffix}_PCT_DIFF'] = (features[home_col] - features[away_col]) / denominator
+    
+    # 5. Asegurar que las columnas requeridas estén presentes
     required_columns = [
         'TEAM_ABBREVIATION_HOME', 
         'TEAM_ABBREVIATION_AWAY',
-        'GAME_DATE'
+        'GAME_DATE',
+        'PTS_HOME', 'PTS_AWAY',
+        'OFF_RATING_HOME', 'OFF_RATING_AWAY',
+        'DEF_RATING_HOME', 'DEF_RATING_AWAY',
+        'NET_RATING_HOME', 'NET_RATING_AWAY',
+        'PACE_HOME', 'PACE_AWAY',
+        'W_PCT_HOME', 'W_PCT_AWAY'
     ]
     
-    for col in required_columns:
-        if col not in features.columns:
-            print(f"⚠️ Columna requerida no encontrada: {col}")
-            return pd.DataFrame()
+    # Verificar columnas faltantes
+    missing_columns = [col for col in required_columns if col not in features.columns]
+    if missing_columns:
+        print(f"⚠️ Advertencia: Faltan columnas: {missing_columns}")
+        # Rellenar con valores por defecto si es necesario
+        for col in missing_columns:
+            if col.endswith('_HOME') or col.endswith('_AWAY'):
+                default_value = 100 if 'RATING' in col else 0
+                features[col] = default_value
     
-    # Añadir características básicas
+    # 6. Añadir características adicionales
     features['IS_HOME'] = 1  # Para consistencia con el modelo
     features['OPPONENT_TEAM_ABBREVIATION'] = features['TEAM_ABBREVIATION_AWAY']
-    
-    # Añadir características adicionales (esto es un ejemplo, ajusta según tus necesidades)
     features['DAYS_SINCE_LAST_GAME'] = 3  # Valor predeterminado
     features['IS_B2B'] = 0  # No hay información de back-to-back para partidos futuros
     
-    # Asegurarse de que las columnas de fecha sean de tipo datetime
+    # Asegurar que las columnas de fecha sean de tipo datetime
     if 'GAME_DATE' in features.columns and not pd.api.types.is_datetime64_any_dtype(features['GAME_DATE']):
         features['GAME_DATE'] = pd.to_datetime(features['GAME_DATE'])
     

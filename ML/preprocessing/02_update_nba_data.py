@@ -97,38 +97,52 @@ class NBADataUpdater:
             logger.info(f"🔍 Buscando datos para la temporada {season}...")
             fetcher = NBADataFetcher()
             
-            # Descargar datos de la temporada regular
-            logger.info("Buscando partidos de temporada regular...")
-            regular_season = fetcher.get_season_games(season=season, season_type='Regular Season')
+            # Obtener estadísticas de equipo primero
+            logger.info("📊 Obteniendo estadísticas de equipos...")
+            team_stats = fetcher.get_team_stats(season, 'Regular Season')
             
-            # Descargar datos de playoffs si los hay
-            logger.info("Buscando partidos de playoffs...")
-            playoffs = fetcher.get_season_games(season=season, season_type='Playoffs')
+            # Procesar temporada regular
+            logger.info("🏀 Buscando partidos de temporada regular...")
+            regular_games = fetcher.get_season_games(season=season, season_type='Regular Season')
             
-            # Combinar datos
-            if regular_season is not None and not regular_season.empty:
-                if playoffs is not None and not playoffs.empty:
-                    new_data = pd.concat([regular_season, playoffs], ignore_index=True)
-                else:
-                    new_data = regular_season
-            elif playoffs is not None and not playoffs.empty:
-                new_data = playoffs
-            else:
-                new_data = pd.DataFrame()
+            # Procesar playoffs si los hay
+            logger.info("🏆 Buscando partidos de playoffs...")
+            playoff_games = fetcher.get_season_games(season=season, season_type='Playoffs')
             
-            # Filtrar por fecha si es necesario
-            if not new_data.empty and self.last_game_date is not None:
-                if 'GAME_DATE' in new_data.columns:
-                    new_data['GAME_DATE'] = pd.to_datetime(new_data['GAME_DATE'])
-                    new_data = new_data[new_data['GAME_DATE'] > self.last_game_date]
-                    logger.info(f"Filtrados {len(new_data)//2} partidos nuevos después de {self.last_game_date}")
+            # Combinar partidos
+            all_games = []
             
-            if new_data is not None and not new_data.empty:
-                logger.info(f"✅ Se encontraron {len(new_data)//2} partidos nuevos")
+            for games, season_type in [(regular_games, 'Regular Season'), (playoff_games, 'Playoffs')]:
+                if games is not None and not games.empty:
+                    # Filtrar partidos nuevos
+                    if 'GAME_DATE' in games.columns:
+                        games['GAME_DATE'] = pd.to_datetime(games['GAME_DATE'])
+                        if self.last_game_date is not None:
+                            games = games[games['GAME_DATE'] > self.last_game_date]
+                    
+                    if not games.empty:
+                        # Procesar partidos con estadísticas de equipo
+                        logger.info(f"🔄 Procesando {len(games)} partidos de {season_type}...")
+                        processed_games = fetcher.process_games_data(games, team_stats)
+                        
+                        if processed_games is not None and not processed_games.empty:
+                            # Calcular días de descanso y B2B
+                            processed_games = fetcher.calculate_rest_days_and_b2b(processed_games)
+                            
+                            # Calcular distancias de viaje
+                            processed_games = fetcher.calculate_travel_distances(processed_games)
+                            
+                            all_games.append(processed_games)
+                            logger.info(f"✅ Procesados {len(processed_games)} partidos de {season_type}")
+            
+            # Combinar todos los partidos
+            if all_games:
+                new_data = pd.concat(all_games, ignore_index=True)
+                logger.info(f"✅ Total de partidos nuevos: {len(new_data)}")
                 return new_data
             else:
-                logger.info("No se encontraron partidos nuevos")
-                return None
+                logger.info("ℹ️ No se encontraron partidos nuevos")
+                return pd.DataFrame()
                 
         except Exception as e:
             logger.error(f"Error al descargar nuevos datos: {e}")
