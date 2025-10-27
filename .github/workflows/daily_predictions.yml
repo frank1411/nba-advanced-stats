@@ -50,14 +50,15 @@ jobs:
       run: |
         # Crear estructura de directorios necesaria
         mkdir -p ML/data/raw ML/data/processed ML/data/predictions
-        # Asegurar que exista .gitkeep
-        touch ML/data/predictions/.gitkeep
+        # Asegurar permisos
+        chmod -R 777 ML/data/
         echo "✅ Estructura de directorios configurada"
     
     - name: Limpiar carpeta de predicciones
       run: |
-        rm -rf ML/data/predictions/*
-        echo "Carpeta de predicciones limpiada correctamente"
+        # Limpiar solo el contenido, no el directorio
+        rm -f ML/data/predictions/*
+        echo "🗑️  Carpeta de predicciones limpiada correctamente"
     
     - name: Ejecutar actualización de datos de la NBA
       run: |
@@ -78,8 +79,23 @@ jobs:
     - name: Generar predicciones
       run: |
         echo "🔮 Generando predicciones..."
-        python ML/models/06_predict_upcoming_games.py
-        echo "✅ Predicciones generadas exitosamente"
+        # Verificar que el directorio de salida existe
+        mkdir -p ML/data/predictions
+        # Ejecutar el script de predicciones
+        if python ML/models/06_predict_upcoming_games.py; then
+          echo "✅ Predicciones generadas exitosamente"
+          # Verificar que los archivos se hayan creado
+          if [ -f "ML/data/predictions/predictions_$(date +%Y%m%d).md" ]; then
+            echo "📄 Archivo de predicciones encontrado: ML/data/predictions/predictions_$(date +%Y%m%d).md"
+          else
+            echo "⚠️ No se encontró el archivo de predicciones esperado"
+            ls -la ML/data/predictions/ || true
+            exit 1
+          fi
+        else
+          echo "❌ Error al generar las predicciones"
+          exit 1
+        fi
     
     - name: Configurar Git
       run: |
@@ -94,59 +110,65 @@ jobs:
         # Asegurar que los directorios existen
         mkdir -p ML/data/processed ML/data/predictions
         
-        # Agregar solo los archivos necesarios al staging
-        git add ML/data/processed/nba_games_final.* 2>/dev/null || true
+        # Agregar archivos al staging
+        git add -f ML/data/processed/nba_games_final.* 2>/dev/null || true
+        git add -f ML/data/processed/.gitkeep 2>/dev/null || true
+        git add -f ML/data/predictions/.gitkeep 2>/dev/null || true
         
-        # Verificar si hay cambios en los archivos rastreados
-        if ! git diff --cached --quiet; then
-          echo "✅ Se encontraron cambios en los archivos procesados"
-          echo "changes=true" >> $GITHUB_OUTPUT
-        else
-          echo "ℹ️ No hay cambios en los archivos procesados"
-          echo "changes=false" >> $GITHUB_OUTPUT
-        fi
-        
-        # Copiar archivos de predicción para el artefacto (sin hacer commit)
+        # Agregar archivos de predicción
         if [ -d "ML/data/predictions" ]; then
+          # Copiar archivos de predicción para el artefacto
           mkdir -p predictions
           cp ML/data/predictions/*.csv predictions/ 2>/dev/null || echo "No se encontraron archivos de predicción"
+          
+          # Agregar archivos de predicción al commit
+          for file in ML/data/predictions/*.csv; do
+            if [ -f "$file" ]; then
+              git add -f "$file" 2>/dev/null || true
+            fi
+          done
+        else
+          echo "No se encontró el directorio de predicciones"
+        fi
+        
+        # Verificar si hay cambios
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "No hay cambios para hacer commit"
+          echo "changes=false" >> $GITHUB_OUTPUT
         fi
     
     - name: Hacer commit y push
       if: steps.check_changes.outputs.changes == 'true'
       run: |
-        # Configurar Git
-        git config --global user.name 'GitHub Actions'
-        git config --global user.email 'actions@github.com'
+        # Configurar Git para hacer rebase por defecto
         git config --global pull.rebase true
         
-        # Hacer commit de los cambios
-        git commit -m "[Automated] Actualización de datos de la NBA $(date +'%Y-%m-%d')" || {
+        # Hacer pull con rebase primero
+        git pull --rebase origin desa || {
+          echo "⚠️ Error al hacer pull. Intentando continuar..."
+          git rebase --abort 2>/dev/null || true
+          exit 1
+        }
+        
+        # Hacer commit de los cambios locales
+        git commit -m "[Automated] Actualización de datos y predicciones NBA" || {
           echo "⚠️ No hay cambios para hacer commit"
           exit 0
         }
         
-        # Hacer pull con rebase antes de push
-        echo "🔄 Sincronizando con el repositorio remoto..."
-        git pull --rebase origin desa || {
-          echo "⚠️ Error al sincronizar. Reintentando..."
-          git rebase --abort 2>/dev/null || true
-          git reset --hard origin/desa
-          exit 1
-        }
-        
         # Hacer push de los cambios
-        echo "🚀 Subiendo cambios al repositorio..."
         git push origin desa || {
-          echo "⚠️ Falló el push. Reintentando..."
+          echo "⚠️ Falló el push. Haciendo pull y reintentando..."
           git pull --rebase origin desa
           git push origin desa || {
-            echo "❌ Error al subir los cambios"
+            echo "❌ Error al hacer push después del rebase"
             exit 1
           }
         }
         
-        echo "✅ ¡Cambios subidos exitosamente!"
+        echo "✅ Cambios subidos correctamente"
       env:
         GIT_AUTHOR_NAME: GitHub Actions
         GIT_COMMITTER_NAME: GitHub Actions
