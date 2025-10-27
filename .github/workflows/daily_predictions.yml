@@ -56,8 +56,17 @@ jobs:
     
     - name: Limpiar carpeta de predicciones
       run: |
-        # Limpiar solo el contenido, no el directorio
-        rm -f ML/data/predictions/*
+        echo "🔍 Contenido de la carpeta de predicciones antes de limpiar:"
+        ls -la ML/data/predictions/ || true
+        
+        # Asegurarse de que el directorio existe
+        mkdir -p ML/data/predictions
+        
+        # Eliminar todo el contenido excepto .gitkeep
+        find ML/data/predictions/ -mindepth 1 ! -name '.gitkeep' -exec rm -rf {} + 2>/dev/null || true
+        
+        echo "✅ Contenido de la carpeta después de limpiar:"
+        ls -la ML/data/predictions/ || true
         echo "🗑️  Carpeta de predicciones limpiada correctamente"
     
     - name: Ejecutar actualización de datos de la NBA
@@ -78,22 +87,44 @@ jobs:
     
     - name: Generar predicciones
       run: |
+        echo "🔍 Estado actual del directorio de predicciones:"
+        ls -la ML/data/predictions/ || true
+        
         echo "🔮 Generando predicciones..."
-        # Verificar que el directorio de salida existe
+        # Verificar que el directorio de salida existe y tiene permisos
         mkdir -p ML/data/predictions
+        chmod -R 777 ML/data/predictions
+        
+        # Mostrar el directorio actual y el contenido
+        echo "📂 Directorio actual: $(pwd)"
+        echo "📂 Contenido del directorio ML/data/predictions:"
+        ls -la ML/data/predictions/ || true
+        
         # Ejecutar el script de predicciones
-        if python ML/models/06_predict_upcoming_games.py; then
-          echo "✅ Predicciones generadas exitosamente"
-          # Verificar que los archivos se hayan creado
-          if [ -f "ML/data/predictions/predictions_$(date +%Y%m%d).md" ]; then
-            echo "📄 Archivo de predicciones encontrado: ML/data/predictions/predictions_$(date +%Y%m%d).md"
-          else
-            echo "⚠️ No se encontró el archivo de predicciones esperado"
-            ls -la ML/data/predictions/ || true
-            exit 1
-          fi
+        echo "🚀 Ejecutando script de predicciones..."
+        python ML/models/06_predict_upcoming_games.py
+        
+        # Verificar el código de salida
+        PREDICTION_EXIT_CODE=$?
+        echo "📊 Código de salida del script: $PREDICTION_EXIT_CODE"
+        
+        # Verificar que los archivos se hayan creado
+        echo "🔍 Buscando archivos de predicciones generados..."
+        ls -la ML/data/predictions/ || true
+        
+        # Verificar archivos específicos
+        TODAY=$(date +%Y%m%d)
+        if [ -f "ML/data/predictions/predictions_${TODAY}.md" ] && [ -f "ML/data/predictions/predictions_${TODAY}.csv" ]; then
+          echo "✅ Archivos de predicciones generados correctamente:"
+          echo "   - ML/data/predictions/predictions_${TODAY}.md"
+          echo "   - ML/data/predictions/predictions_${TODAY}.csv"
+          # Mostrar las primeras líneas del archivo MD para verificación
+          echo "📝 Vista previa del archivo MD:"
+          head -n 10 "ML/data/predictions/predictions_${TODAY}.md" || true
         else
-          echo "❌ Error al generar las predicciones"
+          echo "❌ No se encontraron los archivos de predicciones esperados"
+          echo "🔍 Buscando archivos recientes:"
+          find ML/data/predictions/ -type f -mtime -1 -ls || true
           exit 1
         fi
     
