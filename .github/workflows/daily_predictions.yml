@@ -152,35 +152,34 @@ jobs:
         git add -f ML/data/processed/.gitkeep 2>/dev/null || true
         git add -f ML/data/predictions/.gitkeep 2>/dev/null || true
         
-        # Agregar archivos de predicción
-        if [ -d "ML/data/predictions" ]; then
-          # Copiar archivos de predicción para el artefacto
-          mkdir -p predictions
-          
-          # Asegurar que los archivos tengan permisos de lectura
-          chmod -R 644 ML/data/predictions/* 2>/dev/null || true
-          
-          # Copiar tanto CSV como MD para el artefacto
-          cp ML/data/predictions/*.csv predictions/ 2>/dev/null || echo "No se encontraron archivos CSV de predicción"
-          cp ML/data/predictions/*.md predictions/ 2>/dev/null || echo "No se encontraron archivos MD de predicción"
-          
-          # Agregar archivos de predicción al commit
-          for file in ML/data/predictions/*; do
-            if [ -f "$file" ]; then
-              git add -f "$file" 2>/dev/null || echo "No se pudo agregar $file"
-            fi
-          done
-          
-          # Mostrar el estado de git para depuración
-          echo "📊 Estado actual de git:"
-          git status --porcelain ML/data/predictions/ || true
-        else
-          echo "❌ No se encontró el directorio de predicciones"
-          exit 1
-        fi
+        # Copiar archivos de predicción para el artefacto
+        mkdir -p predictions
+        
+        # Asegurar que los archivos tengan permisos de lectura
+        chmod -R 644 ML/data/predictions/* 2>/dev/null || true
+        
+        # Copiar tanto CSV como MD para el artefacto
+        cp ML/data/predictions/*.csv predictions/ 2>/dev/null || echo "No se encontraron archivos CSV de predicción"
+        cp ML/data/predictions/*.md predictions/ 2>/dev/null || echo "No se encontraron archivos MD de predicción"
+        
+        # Agregar archivos de predicción al commit
+        for file in ML/data/predictions/*; do
+          if [ -f "$file" ]; then
+            git add -f "$file" 2>/dev/null || echo "No se pudo agregar $file"
+          fi
+        done
+        
+        # Mostrar el estado de git para depuración
+        echo "📊 Estado actual de git:"
+        git status --porcelain ML/data/predictions/ || true
         
         # Verificar si hay cambios
         if [ -n "$(git status --porcelain)" ]; then
+          echo "changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "No hay cambios para hacer commit"
+          echo "changes=false" >> $GITHUB_OUTPUT
+        fi
     
     - name: Hacer commit y push
       run: |
