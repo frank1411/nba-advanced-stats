@@ -1,0 +1,22 @@
+{
+  "PTS_HOME": {
+    "metrics": {
+      "mae": 9.033028557089855,
+      "rmse": 11.279096171552373,
+      "r2": 0.2028960191689282,
+      "mean_actual": 114.48051948051948,
+      "mean_pred": 115.06607805848918
+    },
+    "model": "RandomForestRegressor"
+  },
+  "PTS_AWAY": {
+    "metrics": {
+      "mae": 9.163562214964601,
+      "rmse": 11.541777641809157,
+      "r2": 0.19413766339047622,
+      "mean_actual": 112.53628724216959,
+      "mean_pred": 112.6768150115262
+    },
+    "model": "RandomForestRegressor"
+  }
+}

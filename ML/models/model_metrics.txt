@@ -1,0 +1,17 @@
+Métricas de rendimiento de los modelos:
+==================================================
+
+Modelo: PTS_HOME
+- Error Absoluto Medio (MAE): 7.43
+- Raíz del Error Cuadrático Medio (RMSE): 9.35
+- R² Score: 0.4413
+- Muestras de entrenamiento: 7,096
+- Muestras de prueba: 1,775
+
+Modelo: PTS_AWAY
+- Error Absoluto Medio (MAE): 7.48
+- Raíz del Error Cuadrático Medio (RMSE): 9.40
+- R² Score: 0.4516
+- Muestras de entrenamiento: 7,096
+- Muestras de prueba: 1,775
+

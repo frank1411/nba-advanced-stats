@@ -6,6 +6,7 @@ ENV/
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
 
 # Archivos de configuración de entornos virtuales
 .env
@@ -17,6 +18,61 @@ env/
 .vscode/
 *.swp
 *.swo
+
+# Machine Learning
+ML/models/*.h5
+ML/models/checkpoints/
+ML/models/*.pt
+ML/models/*.pth
+
+# Modelos permitidos (necesarios para producción)
+!ML/models/model_PTS_HOME.pkl
+!ML/models/model_PTS_AWAY.pkl
+!ML/models/best_pipeline.pkl
+
+# Datos
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/nba_games_raw.parquet
+
+# Procesados - Solo permitir archivos específicos
+data/processed/*
+!data/processed/nba_games_final.csv
+!data/processed/nba_games_final.parquet
+!data/processed/.gitkeep
+
+# Otros archivos de datos
+*.feather
+*.h5
+*.hdf5
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# Logs
+logs/
+*.log
+
+# Predictions - Solo permitir archivos específicos
+output/predictions/
+data/predictions/*
+!data/predictions/.gitkeep
+!data/predictions/predictions_*.csv
+!data/predictions/predictions_*.md
+!ML/data/predictions/.gitkeep
+
+# Archivos temporales
+*.tmp
+*~
+
+# Configuración local
+local_settings.py
+.env.local
+
+# Archivos de sistema operativo
+.DS_Store
+Thumbs.db
 
 # Archivos de datos
 *.csv
