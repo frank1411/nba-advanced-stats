@@ -8,10 +8,12 @@ __pycache__/
 *$py.class
 *.pyc
 
-# Archivos de configuración de entornos virtuales
+# Entornos virtuales
 .env
-.venv
+.venv/
+venv/
 env/
+ENV/
 
 # Archivos de configuración de IDE
 .idea/
@@ -77,6 +79,8 @@ Thumbs.db
 # Archivos de datos
 *.csv
 *.xlsx
+*.parquet
+!ML/data/processed/nba_games_final.parquet
 *.db
 *.sqlite3
 

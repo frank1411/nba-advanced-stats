@@ -7,35 +7,71 @@ Script para predecir partidos futuros de la NBA.
 3. Aplica los modelos entrenados
 4. Muestra y guarda los resultados
 """
-# Módulos estándar
-import json
-import logging
+# =============================================================================
+# CONFIGURACIÓN INICIAL Y MANEJO DE ADVERTENCIAS
+# =============================================================================
 import os
 import sys
 import warnings
+import json
+import logging
+import random
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 
-# Módulos de terceros
-import joblib
+# Configuración de advertencias
+warnings.filterwarnings('ignore', category=UserWarning, module='sklearn')
+warnings.filterwarnings('ignore', category=FutureWarning)
+
+# Configuración de logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# =============================================================================
+# CONFIGURACIÓN DE SEMILLAS ALEATORIAS PARA REPRODUCIBILIDAD
+# =============================================================================
 import numpy as np
-import pandas as pd
-import pytz
-from scipy.stats import norm
+
+# Establecer semillas para reproducibilidad
+SEED = 42
+os.environ['PYTHONHASHSEED'] = str(SEED)
+random.seed(SEED)
+np.random.seed(SEED)
+
+# Configuración de numpy
+np.seterr(all='warn')
+
+# Configuración de TensorFlow (si está disponible)
+try:
+    import tensorflow as tf
+    tf.random.set_seed(SEED)
+    os.environ['TF_DETERMINISTIC_OPS'] = '1'
+    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+    logger.info("TensorFlow configurado con semilla determinista")
+except ImportError:
+    logger.warning("TensorFlow no está instalado. Algunas funcionalidades pueden no estar disponibles.")
+
+# Configuración de scikit-learn
+try:
+    from sklearn import set_config
+    set_config(assume_finite=True, working_memory=1024)  # 1GB de memoria para scikit-learn
+    logger.info("scikit-learn configurado correctamente")
+except (ImportError, AttributeError) as e:
+    logger.warning(f"No se pudo configurar scikit-learn: {str(e)}")
+
+# Resto de importaciones de terceros
+try:
+    import pandas as pd
+    import joblib
+    import pytz
+    from scipy.stats import norm
+    logger.info("Módulos de análisis de datos cargados correctamente")
+except ImportError as e:
+    logger.error(f"Error al cargar módulos de análisis de datos: {str(e)}")
+    raise
 
 # No más datos estáticos - Ahora obtenemos los partidos directamente de la API
-
-# Configurar logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('nba_predictions.log')
-    ]
-)
-logger = logging.getLogger(__name__)
 
 # Suprimir advertencias
 warnings.filterwarnings('ignore')
@@ -368,9 +404,13 @@ def generate_features(upcoming_games: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     # 1. Cargar datos históricos procesados
-    # Usar ruta absoluta fija
-    processed_data_path = '/Users/franklinsantaella/CascadeProjects/nba_advanced_stats/ML/data/processed/nba_games_final.parquet'
+    # Usar ruta relativa al directorio del proyecto
+    import os
+    print(f"Directorio actual: {os.getcwd()}")
+    # Ruta corregida: desde el directorio actual (ML/models) necesitamos subir un nivel (..) y luego entrar a data/processed
+    processed_data_path = os.path.abspath(os.path.join(BASE_DIR, '..', 'ML', 'data', 'processed', 'nba_games_final.parquet'))
     print(f"🔍 Buscando datos en: {processed_data_path}")
+    print(f"¿Existe el archivo? {os.path.exists(processed_data_path)}")
     try:
         historical_data = pd.read_parquet(processed_data_path)
         print(f"✅ Datos históricos cargados: {len(historical_data)} partidos")
