@@ -7,10 +7,32 @@ Script para predecir partidos futuros de la NBA.
 3. Aplica los modelos entrenados
 4. Muestra y guarda los resultados
 """
+# =============================================================================
+# CONFIGURACIÓN DE SEMILLAS ALEATORIAS PARA REPRODUCIBILIDAD
+# =============================================================================
+import os
+import random
+import numpy as np
+import tensorflow as tf
+
+# Establecer semillas para reproducibilidad
+SEED = 42
+os.environ['PYTHONHASHSEED'] = str(SEED)
+random.seed(SEED)
+np.random.seed(SEED)
+tf.random.set_seed(SEED)
+
+# Configurar semillas para entornos paralelos
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+
+# Configurar semillas para scikit-learn
+from sklearn import config
+config.set_config(assume_finite=True)
+
 # Módulos estándar
 import json
 import logging
-import os
 import sys
 import warnings
 from datetime import datetime, timedelta
@@ -19,7 +41,6 @@ from typing import List, Dict, Any, Optional, Tuple
 
 # Módulos de terceros
 import joblib
-import numpy as np
 import pandas as pd
 import pytz
 from scipy.stats import norm
