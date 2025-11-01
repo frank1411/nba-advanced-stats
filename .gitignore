@@ -77,6 +77,8 @@ Thumbs.db
 # Archivos de datos
 *.csv
 *.xlsx
+*.parquet
+!ML/data/processed/nba_games_final.parquet
 *.db
 *.sqlite3
 
