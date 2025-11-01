@@ -85,11 +85,32 @@ jobs:
         cd ML/models && python 06_predict_upcoming_games.py
         echo "✅ Predicciones generadas correctamente"
     
-    - name: Verificar cambios
+    - name: Configurar Git
+      run: |
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'actions@github.com'
+        git config --global --add safe.directory /github/workspace
+    
+    - name: Verificar cambios en predicciones
       id: changes
       run: |
-        git add .
-        git diff --quiet && git diff --staged --quiet || echo "changes=true" >> $GITHUB_OUTPUT
+        echo "📂 Contenido de la carpeta de predicciones:"
+        ls -la ML/data/predictions/
+        
+        # Verificar si hay archivos nuevos
+        if [ "$(git status --porcelain ML/data/predictions/ | grep -v '.gitkeep' | wc -l)" -gt 0 ]; then
+          echo "📝 Se detectaron cambios en las predicciones"
+          echo "changes=true" >> $GITHUB_OUTPUT
+          
+          # Mostrar los cambios
+          echo -e "\n📝 Cambios detectados:"
+          git status ML/data/predictions/
+          echo -e "\n📝 Diff:"
+          git diff ML/data/predictions/ || true
+        else
+          echo "ℹ️ No hay cambios en las predicciones"
+          echo "changes=false" >> $GITHUB_OUTPUT
+        fi
     
     - name: Confirmar y subir cambios
       if: steps.changes.outputs.changes == 'true'
@@ -97,20 +118,20 @@ jobs:
         set -e  # Detener en caso de error
         
         echo "🔍 Preparando para confirmar cambios..."
-        git config --global user.name 'GitHub Actions'
-        git config --global user.email 'actions@github.com'
         
-        # Configurar el token de acceso
-        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+        # Agregar solo los archivos de predicciones
+        git add ML/data/predictions/
         
         # Crear un commit con los cambios
-        git add .
-        git commit -m "🤖 Actualización automática: datos y predicciones $(date +'%Y-%m-%d')" || echo "⚠️ No hay cambios para confirmar"
-        
-        # Hacer push a la rama main
-        git push origin main
-        
-        echo "✅ Cambios confirmados y subidos a la rama main"
+        if ! git diff --cached --quiet; then
+          git commit -m "🤖 Actualización automática: predicciones $(date +'%Y-%m-%d')"
+          
+          # Hacer push usando el token de acceso
+          git push origin HEAD:main
+          echo "✅ Cambios confirmados y subidos a la rama main"
+        else
+          echo "ℹ️ No hay cambios para confirmar"
+        fi
     
     - name: Notificar éxito
       if: success()
