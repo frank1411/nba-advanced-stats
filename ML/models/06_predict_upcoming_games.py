@@ -8,55 +8,70 @@ Script para predecir partidos futuros de la NBA.
 4. Muestra y guarda los resultados
 """
 # =============================================================================
-# CONFIGURACIÓN DE SEMILLAS ALEATORIAS PARA REPRODUCIBILIDAD
+# CONFIGURACIÓN INICIAL Y MANEJO DE ADVERTENCIAS
 # =============================================================================
 import os
+import sys
+import warnings
+import json
+import logging
 import random
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import List, Dict, Any, Optional, Tuple
+
+# Configuración de advertencias
+warnings.filterwarnings('ignore', category=UserWarning, module='sklearn')
+warnings.filterwarnings('ignore', category=FutureWarning)
+
+# Configuración de logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# =============================================================================
+# CONFIGURACIÓN DE SEMILLAS ALEATORIAS PARA REPRODUCIBILIDAD
+# =============================================================================
 import numpy as np
-import tensorflow as tf
 
 # Establecer semillas para reproducibilidad
 SEED = 42
 os.environ['PYTHONHASHSEED'] = str(SEED)
 random.seed(SEED)
 np.random.seed(SEED)
-tf.random.set_seed(SEED)
 
-# Configurar semillas para entornos paralelos
-os.environ['TF_DETERMINISTIC_OPS'] = '1'
-os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+# Configuración de numpy
+np.seterr(all='warn')
 
-# Configurar semillas para scikit-learn
-from sklearn import config
-config.set_config(assume_finite=True)
+# Configuración de TensorFlow (si está disponible)
+try:
+    import tensorflow as tf
+    tf.random.set_seed(SEED)
+    os.environ['TF_DETERMINISTIC_OPS'] = '1'
+    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+    logger.info("TensorFlow configurado con semilla determinista")
+except ImportError:
+    logger.warning("TensorFlow no está instalado. Algunas funcionalidades pueden no estar disponibles.")
 
-# Módulos estándar
-import json
-import logging
-import sys
-import warnings
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+# Configuración de scikit-learn
+try:
+    from sklearn import set_config
+    set_config(assume_finite=True, working_memory=1024)  # 1GB de memoria para scikit-learn
+    logger.info("scikit-learn configurado correctamente")
+except (ImportError, AttributeError) as e:
+    logger.warning(f"No se pudo configurar scikit-learn: {str(e)}")
 
-# Módulos de terceros
-import joblib
-import pandas as pd
-import pytz
-from scipy.stats import norm
+# Resto de importaciones de terceros
+try:
+    import pandas as pd
+    import joblib
+    import pytz
+    from scipy.stats import norm
+    logger.info("Módulos de análisis de datos cargados correctamente")
+except ImportError as e:
+    logger.error(f"Error al cargar módulos de análisis de datos: {str(e)}")
+    raise
 
 # No más datos estáticos - Ahora obtenemos los partidos directamente de la API
-
-# Configurar logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('nba_predictions.log')
-    ]
-)
-logger = logging.getLogger(__name__)
 
 # Suprimir advertencias
 warnings.filterwarnings('ignore')
