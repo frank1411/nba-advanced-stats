@@ -1,0 +1,164 @@
+name: NBA Main Pipeline
+
+# Configuración de permisos para el token de GitHub
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+
+on:
+  # Ejecutar diariamente a las 9:00 AM (hora de Venezuela, UTC-4)
+  schedule:
+    - cron: '0 13 * * *'  # 13:00 UTC = 9:00 AM Venezuela (UTC-4)
+  
+  # Permite ejecución manual desde la interfaz de GitHub
+  workflow_dispatch:
+  
+  # Se activa con push a main o cambios en la carpeta ML
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/main_workflow.yml'
+      - 'ML/**'
+  
+  # Se activa con PRs a main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  nba-main-pipeline:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout del código
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Configurar Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+    
+    - name: Instalar dependencias
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pandas pyarrow scikit-learn
+    
+    - name: Verificar estructura del proyecto
+      run: |
+        echo "📂 Estructura del proyecto:"
+        ls -la
+        echo "\n📂 Contenido de ML/:"
+        ls -la ML/
+    
+    - name: Limpiar predicciones anteriores
+      run: |
+        echo "🧹 Limpiando predicciones anteriores..."
+        mkdir -p ML/data/predictions
+        # Eliminar archivos existentes excepto .gitkeep
+        find ML/data/predictions -type f ! -name '.gitkeep' -exec rm -f {} \;
+        echo "✅ Predicciones anteriores eliminadas"
+    
+    - name: Ejecutar actualización de datos
+      run: |
+        set -e  # Detener en caso de error
+        echo "🔄 Actualizando datos de la NBA..."
+        cd ML/preprocessing && python 02_update_nba_data.py
+        echo "✅ Datos actualizados correctamente"
+        
+    - name: Procesar dataset final
+      run: |
+        set -e  # Detener en caso de error
+        echo "📊 Procesando dataset final..."
+        cd ML/preprocessing && python 03_process_final_dataset.py
+        echo "✅ Dataset procesado correctamente"
+    
+    - name: Generar predicciones
+      run: |
+        set -e  # Detener en caso de error
+        echo "🔮 Generando predicciones..."
+        cd ML/models && python 06_predict_upcoming_games.py
+        echo "✅ Predicciones generadas correctamente"
+    
+    - name: Verificar cambios
+      id: changes
+      run: |
+        git add .
+        git diff --quiet && git diff --staged --quiet || echo "changes=true" >> $GITHUB_OUTPUT
+    
+    - name: Confirmar y subir cambios
+      if: steps.changes.outputs.changes == 'true'
+      run: |
+        set -e  # Detener en caso de error
+        
+        echo "🔍 Preparando para confirmar cambios..."
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'actions@github.com'
+        
+        # Configurar el token de acceso
+        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+        
+        # Crear un commit con los cambios
+        git add .
+        git commit -m "🤖 Actualización automática: datos y predicciones $(date +'%Y-%m-%d')" || echo "⚠️ No hay cambios para confirmar"
+        
+        # Hacer push a la rama main
+        git push origin main
+        
+        echo "✅ Cambios confirmados y subidos a la rama main"
+    
+    - name: Notificar éxito
+      if: success()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const { data: prs } = await github.rest.pulls.list({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            head: 'main'
+          });
+          
+          if (prs.length > 0) {
+            await github.rest.issues.createComment({
+              issue_number: prs[0].number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ **Pipeline ejecutado con éxito!**\n\n' +
+                    'Se han actualizado los datos y generado nuevas predicciones.\n' +
+                    '📅 Fecha: ' + new Date().toISOString() + '\n' +
+                    '🔗 [Ver cambios](https://github.com/frank1411/nba-advanced-stats/commit/${{ github.sha }})'
+            });
+          }
+    
+    - name: Notificar fallo
+      if: failure()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const { data: prs } = await github.rest.pulls.list({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            head: 'main'
+          });
+          
+          if (prs.length > 0) {
+            await github.rest.issues.createComment({
+              issue_number: prs[0].number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ **Error en el pipeline**\n\n' +
+                    'Hubo un error durante la ejecución del workflow.\n' +
+                    '📅 Fecha: ' + new Date().toISOString() + '\n' +
+                    '🔗 [Ver detalles del error](https://github.com/frank1411/nba-advanced-stats/actions/runs/${{ github.run_id }})'
+            });
+          }
+          
+          // Fallar el workflow
+          core.setFailed('Error en el pipeline. Verifica los logs para más detalles.');
