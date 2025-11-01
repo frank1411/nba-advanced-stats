@@ -82,14 +82,30 @@ jobs:
       run: |
         set -e  # Detener en caso de error
         echo "🔮 Generando predicciones..."
-        cd ML/models && python 06_predict_upcoming_games.py
+        
+        # Asegurarse de que el directorio de predicciones existe
+        mkdir -p ML/data/predictions
+        
+        # Verificar permisos
+        echo "🔍 Permisos del directorio de predicciones:"
+        ls -la ML/data/
+        
+        # Ejecutar el script de predicción
+        cd ML/models
+        python 06_predict_upcoming_games.py
+        
+        # Verificar que los archivos se hayan creado
+        echo "📂 Archivos generados en ML/data/predictions/:"
+        ls -la ../data/predictions/
+        
         echo "✅ Predicciones generadas correctamente"
     
-    - name: Configurar Git
+    - name: Configurar Git para GitHub Actions
       run: |
         git config --global user.name 'GitHub Actions'
         git config --global user.email 'actions@github.com'
         git config --global --add safe.directory /github/workspace
+        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
     
     - name: Verificar cambios en predicciones
       id: changes
@@ -119,14 +135,25 @@ jobs:
         
         echo "🔍 Preparando para confirmar cambios..."
         
+        # Mostrar el estado actual
+        echo "📝 Estado actual:"
+        git status
+        
         # Agregar solo los archivos de predicciones
+        echo "📝 Agregando archivos de predicciones..."
         git add ML/data/predictions/
+        
+        # Verificar los cambios preparados
+        echo "📝 Cambios preparados para commit:"
+        git diff --cached --name-status
         
         # Crear un commit con los cambios
         if ! git diff --cached --quiet; then
-          git commit -m "🤖 Actualización automática: predicciones $(date +'%Y-%m-%d')"
+          echo "📝 Creando commit..."
+          git commit -m "🤖 Actualización automática: predicciones $(date +'%Y-%m-%d')" || echo "⚠️ No se pudo crear el commit"
           
           # Hacer push usando el token de acceso
+          echo "🚀 Subiendo cambios..."
           git push origin HEAD:main
           echo "✅ Cambios confirmados y subidos a la rama main"
         else
