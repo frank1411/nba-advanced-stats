@@ -176,8 +176,9 @@ def print_stats(stats, title):
 
 if __name__ == "__main__":
     # Obtener estadísticas de temporada regular
-    regular_season = get_team_stats(season_type='Regular Season')
-    print_stats(regular_season, "ESTADÍSTICAS NBA 2024-25 - TEMPORADA REGULAR")
+    season = '2025-26'
+    regular_season = get_team_stats(season=season, season_type='Regular Season')
+    print_stats(regular_season, f"ESTADÍSTICAS NBA {season} - TEMPORADA REGULAR")
     
     # Guardar estadísticas de temporada regular en CSV
     if not regular_season.empty:
@@ -185,12 +186,12 @@ if __name__ == "__main__":
     
     # Intentar obtener estadísticas de playoffs
     try:
-        playoffs = get_team_stats(season_type='Playoffs')
+        playoffs = get_team_stats(season=season, season_type='Playoffs')
         if not playoffs.empty:
-            print_stats(playoffs, "ESTADÍSTICAS NBA 2024-25 - PLAYOFFS")
+            print_stats(playoffs, f"ESTADÍSTICAS NBA {season} - PLAYOFFS")
             # Guardar estadísticas de playoffs en CSV
             save_to_csv(playoffs, 'nba_playoffs_stats.csv')
         else:
-            print("\nℹ️  No hay datos disponibles para los playoffs de la temporada actual.")
+            print(f"\nℹ️  No hay datos disponibles para los playoffs de la temporada {season}.")
     except Exception as e:
         print(f"\n⚠️  No se pudieron obtener los datos de playoffs: {e}")
