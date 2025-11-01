@@ -32,10 +32,11 @@ jobs:
         python ML/scripts/verify_environment.py
         
     - name: Upload verification report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: environment-verification-report
         path: ML/reports/
+        retention-days: 5
         
     - name: Show report summary
       run: |
