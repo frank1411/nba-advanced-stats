@@ -368,7 +368,9 @@ def generate_features(upcoming_games: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     # 1. Cargar datos históricos procesados
-    processed_data_path = os.path.join('ML', 'data', 'processed', 'nba_games_final.parquet')
+    # Usar ruta absoluta fija
+    processed_data_path = '/Users/franklinsantaella/CascadeProjects/nba_advanced_stats/ML/data/processed/nba_games_final.parquet'
+    print(f"🔍 Buscando datos en: {processed_data_path}")
     try:
         historical_data = pd.read_parquet(processed_data_path)
         print(f"✅ Datos históricos cargados: {len(historical_data)} partidos")
@@ -736,10 +738,8 @@ def save_predictions_markdown(predictions: pd.DataFrame, output_dir: Path) -> No
         
         # Sección de predicciones con confianza individual
         markdown_content += "#### 📊 Predicciones de Puntos\n"
-        markdown_content += f"- **{home_team}**: {home_score} puntos  {home_badge} {home_conf_level} ({home_prob:.1f}% confianza)\n"
-        markdown_content += f"  - *Rango probable*: {int(home_score - 5)} - {int(home_score + 5)} puntos\n"
         markdown_content += f"- **{away_team}**: {away_score} puntos  {away_badge} {away_conf_level} ({away_prob:.1f}% confianza)\n"
-        markdown_content += f"  - *Rango probable*: {int(away_score - 5)} - {int(away_score + 5)} puntos\n\n"
+        markdown_content += f"- **{home_team}**: {home_score} puntos  {home_badge} {home_conf_level} ({home_prob:.1f}% confianza)\n"
         
         # Sección de resumen del partido
         markdown_content += f"#### 🏆 Resumen del Partido\n"
