@@ -368,9 +368,13 @@ def generate_features(upcoming_games: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     # 1. Cargar datos históricos procesados
-    # Usar ruta absoluta fija
-    processed_data_path = '/Users/franklinsantaella/CascadeProjects/nba_advanced_stats/ML/data/processed/nba_games_final.parquet'
+    # Usar ruta relativa al directorio del proyecto
+    import os
+    print(f"Directorio actual: {os.getcwd()}")
+    # Ruta corregida: desde el directorio actual (ML/models) necesitamos subir un nivel (..) y luego entrar a data/processed
+    processed_data_path = os.path.abspath(os.path.join(BASE_DIR, '..', 'ML', 'data', 'processed', 'nba_games_final.parquet'))
     print(f"🔍 Buscando datos en: {processed_data_path}")
+    print(f"¿Existe el archivo? {os.path.exists(processed_data_path)}")
     try:
         historical_data = pd.read_parquet(processed_data_path)
         print(f"✅ Datos históricos cargados: {len(historical_data)} partidos")
