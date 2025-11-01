@@ -8,10 +8,12 @@ __pycache__/
 *$py.class
 *.pyc
 
-# Archivos de configuración de entornos virtuales
+# Entornos virtuales
 .env
-.venv
+.venv/
+venv/
 env/
+ENV/
 
 # Archivos de configuración de IDE
 .idea/
