@@ -71,8 +71,10 @@ jobs:
       run: |
         set -e  # Detener en caso de error
         echo "🔄 Actualizando datos de la NBA..."
-        cd ML/preprocessing && python 02_update_nba_data.py
-        echo "✅ Datos actualizados correctamente"
+        cd ML/preprocessing
+        # Forzar actualización con bandera --force-update
+        python 02_update_nba_data.py --force-update
+        echo "✅ Datos actualizados correctamente (forzada la actualización)"
         
     - name: Procesar dataset final
       run: |
