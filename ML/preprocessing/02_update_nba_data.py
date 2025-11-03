@@ -13,6 +13,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from pathlib import Path
 import logging
+import argparse
 from typing import Optional
 
 # Configuración de logging
@@ -204,9 +205,19 @@ class NBADataUpdater:
             logger.error(f"Error al actualizar los datos: {e}")
             return False
 
+def parse_arguments():
+    """Configura y parsea los argumentos de línea de comandos."""
+    parser = argparse.ArgumentParser(description='Actualiza los datos de la NBA con los partidos más recientes.')
+    parser.add_argument('--force-update', action='store_true',
+                      help='Forzar la actualización incluso si no hay partidos nuevos')
+    return parser.parse_args()
+
 def main():
     """Función principal para ejecutar la actualización de datos."""
+    args = parse_arguments()
     logger.info("🚀 Iniciando actualización de datos de la NBA")
+    if args.force_update:
+        logger.warning("🚨 Modo forzado activado: Se ignorará la fecha del último partido")
     
     # Inicializar el actualizador
     updater = NBADataUpdater()
@@ -228,8 +239,8 @@ def main():
     # Descargar datos nuevos
     new_data = updater.fetch_new_data(season=season)
     
-    # Actualizar datos si hay nuevos partidos
-    if new_data is not None and not new_data.empty:
+    # Actualizar datos si hay nuevos partidos o si se fuerza la actualización
+    if (new_data is not None and not new_data.empty) or args.force_update:
         success = updater.update_data(new_data)
         if success:
             logger.info("✅ Actualización completada exitosamente")
