@@ -7,8 +7,8 @@
 - **Estadio**: Estadio no disponible, Ciudad no disponible
 
 #### 📊 Predicciones de Puntos
-- **Boston Celtics**: 119 puntos  🟡 ALTA (74%)
-- **Orlando Magic**: 107 puntos  🟡 ALTA (74%)
+- **Boston Celtics**: 119 puntos  🟡 ALTA (72%)
+- **Orlando Magic**: 107 puntos  🟡 ALTA (75%)
 #### 🏆 Resumen del Partido
 - **Ganador probable**: Boston Celtics (por 12 puntos de diferencia)
 
@@ -19,8 +19,8 @@
 - **Estadio**: Estadio no disponible, Ciudad no disponible
 
 #### 📊 Predicciones de Puntos
-- **Cleveland Cavaliers**: 114 puntos  🟡 ALTA (71%)
-- **Washington Wizards**: 112 puntos  🟡 ALTA (72%)
+- **Cleveland Cavaliers**: 114 puntos  🟡 ALTA (72%)
+- **Washington Wizards**: 112 puntos  🟡 ALTA (70%)
 #### 🏆 Resumen del Partido
 - **Ganador probable**: Cleveland Cavaliers (por 2 puntos de diferencia)
 
@@ -31,8 +31,8 @@
 - **Estadio**: Estadio no disponible, Ciudad no disponible
 
 #### 📊 Predicciones de Puntos
-- **Toronto Raptors**: 109 puntos  🟡 ALTA (73%)
-- **Atlanta Hawks**: 117 puntos  🟡 ALTA (72%)
+- **Toronto Raptors**: 109 puntos  🟡 ALTA (69%)
+- **Atlanta Hawks**: 117 puntos  🟡 ALTA (67%)
 #### 🏆 Resumen del Partido
 - **Ganador probable**: Atlanta Hawks (por 8 puntos de diferencia)
 
@@ -44,7 +44,7 @@
 
 #### 📊 Predicciones de Puntos
 - **Detroit Pistons**: 116 puntos  🟡 ALTA (73%)
-- **Brooklyn Nets**: 121 puntos  🟡 ALTA (74%)
+- **Brooklyn Nets**: 121 puntos  🟡 ALTA (70%)
 #### 🏆 Resumen del Partido
 - **Ganador probable**: Brooklyn Nets (por 5 puntos de diferencia)
 
@@ -55,8 +55,8 @@
 - **Estadio**: Estadio no disponible, Ciudad no disponible
 
 #### 📊 Predicciones de Puntos
-- **Houston Rockets**: 117 puntos  🟡 ALTA (71%)
-- **San Antonio Spurs**: 108 puntos  🟡 ALTA (72%)
+- **Houston Rockets**: 117 puntos  🟡 ALTA (74%)
+- **San Antonio Spurs**: 108 puntos  🟡 ALTA (71%)
 #### 🏆 Resumen del Partido
 - **Ganador probable**: Houston Rockets (por 9 puntos de diferencia)
 
@@ -67,8 +67,8 @@
 - **Estadio**: Estadio no disponible, Ciudad no disponible
 
 #### 📊 Predicciones de Puntos
-- **Charlotte Hornets**: 107 puntos  🟢 ALTA (80%)
-- **Miami Heat**: 113 puntos  🟢 ALTA (86%)
+- **Charlotte Hornets**: 107 puntos  🟢 ALTA (84%)
+- **Miami Heat**: 113 puntos  🟢 ALTA (83%)
 #### 🏆 Resumen del Partido
 - **Ganador probable**: Miami Heat (por 6 puntos de diferencia)
 
@@ -79,8 +79,8 @@
 - **Estadio**: Estadio no disponible, Ciudad no disponible
 
 #### 📊 Predicciones de Puntos
-- **Dallas Mavericks**: 102 puntos  🟡 ALTA (75%)
-- **Memphis Grizzlies**: 106 puntos  🟡 ALTA (75%)
+- **Dallas Mavericks**: 102 puntos  🟡 ALTA (72%)
+- **Memphis Grizzlies**: 106 puntos  🟡 ALTA (73%)
 #### 🏆 Resumen del Partido
 - **Ganador probable**: Memphis Grizzlies (por 4 puntos de diferencia)
 
@@ -91,7 +91,7 @@
 - **Estadio**: Estadio no disponible, Ciudad no disponible
 
 #### 📊 Predicciones de Puntos
-- **Chicago Bulls**: 112 puntos  🟢 ALTA (87%)
+- **Chicago Bulls**: 112 puntos  🟢 ALTA (85%)
 - **Milwaukee Bucks**: 117 puntos  🟢 ALTA (87%)
 #### 🏆 Resumen del Partido
 - **Ganador probable**: Milwaukee Bucks (por 5 puntos de diferencia)
@@ -103,8 +103,8 @@
 - **Estadio**: Estadio no disponible, Ciudad no disponible
 
 #### 📊 Predicciones de Puntos
-- **Utah Jazz**: 116 puntos  🟡 ALTA (73%)
-- **Minnesota Timberwolves**: 118 puntos  🟡 ALTA (74%)
+- **Utah Jazz**: 116 puntos  🟡 ALTA (76%)
+- **Minnesota Timberwolves**: 118 puntos  🟡 ALTA (75%)
 #### 🏆 Resumen del Partido
 - **Ganador probable**: Minnesota Timberwolves (por 2 puntos de diferencia)
 
@@ -116,7 +116,7 @@
 
 #### 📊 Predicciones de Puntos
 - **Golden State Warriors**: 107 puntos  🟡 ALTA (74%)
-- **Denver Nuggets**: 105 puntos  🟡 ALTA (71%)
+- **Denver Nuggets**: 105 puntos  🟡 ALTA (72%)
 #### 🏆 Resumen del Partido
 - **Ganador probable**: Golden State Warriors (por 2 puntos de diferencia)
 
@@ -127,8 +127,8 @@
 - **Estadio**: Estadio no disponible, Ciudad no disponible
 
 #### 📊 Predicciones de Puntos
-- **Oklahoma City Thunder**: 121 puntos  🟡 ALTA (72%)
-- **Sacramento Kings**: 106 puntos  🟡 ALTA (77%)
+- **Oklahoma City Thunder**: 121 puntos  🟡 ALTA (75%)
+- **Sacramento Kings**: 106 puntos  🟡 ALTA (72%)
 #### 🏆 Resumen del Partido
 - **Ganador probable**: Oklahoma City Thunder (por 15 puntos de diferencia)
 
