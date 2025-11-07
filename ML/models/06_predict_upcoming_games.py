@@ -596,29 +596,38 @@ def load_model_metrics(model_path: str) -> dict:
         
     Returns:
         Diccionario con las métricas del modelo
-    """
-    try:
-        # Cargar todas las métricas desde el archivo metrics.json
-        metrics_file = os.path.join(os.path.dirname(__file__), 'metrics.json')
-        with open(metrics_file, 'r') as f:
-            all_metrics = json.load(f)
         
-        # Determinar si es modelo de local o visitante
-        if 'home' in str(model_path).lower() or 'PTS_HOME' in str(model_path).upper():
-            return all_metrics.get('PTS_HOME', {}).get('metrics', {})
-        else:
-            return all_metrics.get('PTS_AWAY', {}).get('metrics', {})
-            
-    except Exception as e:
-        print(f"⚠️  Error al cargar métricas: {e}")
-        # Valores por defecto si no se pueden cargar las métricas
-        return {
-            'mae': 8.5 if 'home' in str(model_path).lower() or 'PTS_HOME' in str(model_path).upper() else 9.2,
-            'rmse': 11.0,
-            'r2': 0.2,
-            'mean_actual': 110.0,
-            'mean_pred': 110.0
-        }
+    Raises:
+        FileNotFoundError: Si no se encuentra el archivo de métricas
+        json.JSONDecodeError: Si hay un error al decodificar el archivo JSON
+        KeyError: Si faltan métricas requeridas
+    """
+    # Cargar todas las métricas desde el archivo metrics.json
+    metrics_file = os.path.join(os.path.dirname(__file__), 'metrics.json')
+    if not os.path.exists(metrics_file):
+        raise FileNotFoundError(f"No se encontró el archivo de métricas: {metrics_file}")
+    
+    with open(metrics_file, 'r') as f:
+        all_metrics = json.load(f)
+    
+    # Determinar si es modelo de local o visitante
+    if 'home' in str(model_path).lower() or 'PTS_HOME' in str(model_path).upper():
+        metrics = all_metrics.get('PTS_HOME', {}).get('metrics')
+        model_type = 'local (PTS_HOME)'
+    else:
+        metrics = all_metrics.get('PTS_AWAY', {}).get('metrics')
+        model_type = 'visitante (PTS_AWAY)'
+    
+    if not metrics:
+        raise KeyError(f"No se encontraron métricas para el modelo {model_type} en {metrics_file}")
+    
+    # Verificar que las métricas requeridas estén presentes
+    required_metrics = ['mae', 'rmse', 'r2']
+    for metric in required_metrics:
+        if metric not in metrics:
+            raise KeyError(f"La métrica requerida '{metric}' no está presente para el modelo {model_type}")
+    
+    return metrics
 
 def predict_games(model_home: Any, model_away: Any, features: pd.DataFrame, feature_cols: List[str]) -> pd.DataFrame:
     """
@@ -637,16 +646,24 @@ def predict_games(model_home: Any, model_away: Any, features: pd.DataFrame, feat
         print("⚠️ No hay datos suficientes para realizar predicciones")
         return pd.DataFrame()
     
-    # Cargar métricas de los modelos usando los nombres correctos
-    home_metrics = load_model_metrics('model_PTS_HOME.pkl')
-    away_metrics = load_model_metrics('model_PTS_AWAY.pkl')
-    
-    # MAE histórico de los modelos
-    HOME_MODEL_MAE = home_metrics.get('mae', 9.03)  # Valor por defecto basado en metrics.json
-    AWAY_MODEL_MAE = away_metrics.get('mae', 9.16)  # Valor por defecto basado en metrics.json
-    
-    print(f"📊 Métricas del modelo local - MAE: {HOME_MODEL_MAE:.2f}")
-    print(f"📊 Métricas del modelo visitante - MAE: {AWAY_MODEL_MAE:.2f}")
+    try:
+        # Cargar métricas de los modelos
+        home_metrics = load_model_metrics('model_PTS_HOME.pkl')
+        away_metrics = load_model_metrics('model_PTS_AWAY.pkl')
+        
+        # Obtener MAE de los modelos
+        HOME_MODEL_MAE = home_metrics['mae']
+        AWAY_MODEL_MAE = away_metrics['mae']
+        
+        print(f"📊 Métricas del modelo local - MAE: {HOME_MODEL_MAE:.2f}")
+        print(f"📊 Métricas del modelo visitante - MAE: {AWAY_MODEL_MAE:.2f}")
+        
+    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+        logger.error(f"❌ Error crítico al cargar las métricas del modelo: {e}")
+        print("\n⚠️  No se pueden generar predicciones sin las métricas de rendimiento del modelo.")
+        print("Por favor, asegúrate de que el archivo 'metrics.json' esté presente y tenga el formato correcto.")
+        print("Ejecuta primero el script de entrenamiento para generar las métricas actualizadas.\n")
+        return pd.DataFrame()
     
     # Asegurarse de que todas las columnas necesarias estén presentes
     missing_cols = [col for col in feature_cols if col not in features.columns]
@@ -747,13 +764,20 @@ def predict_games(model_home: Any, model_away: Any, features: pd.DataFrame, feat
 def get_confidence_badge(confidence: float) -> str:
     """
     Devuelve un emoji de color basado en el nivel de confianza.
-    Actualizado para reflejar mejor la distribución real de errores.
+    Rangos ajustados según distribución real de errores históricos.
+    
+    Basado en datos históricos de precisión:
+    - 🟢 ALTA (≥80%): Error típico ≤5 puntos (33% local / 27% visitante)
+    - 🟡 ALTA (65-79%): Error típico 6-10 puntos
+    - 🟡 MEDIA (50-64%): Error típico 11-14 puntos
+    - 🟠 BAJA (35-49%): Error típico 15-20 puntos
+    - 🔴 MUY BAJA (<35%): Error típico >20 puntos
     
     Args:
         confidence: Nivel de confianza (0-1)
         
     Returns:
-        str: Emoji de color (🔴, 🟠, 🟡, 🟢) y etiqueta de confianza con porcentaje
+        str: Emoji de color y etiqueta de confianza con porcentaje
     """
     # Convertir a porcentaje si es necesario
     if confidence <= 1.0:  # Asumir que está en escala 0-1
@@ -764,17 +788,17 @@ def get_confidence_badge(confidence: float) -> str:
     # Redondear al entero más cercano para la etiqueta
     confidence_pct_rounded = round(confidence_pct)
     
-    # Rangos ajustados según la distribución real de errores
-    if confidence_pct >= 75:
-        return f"🟢 ALTA ({confidence_pct_rounded}%)"      # Verde para alta confianza (≥75%)
-    elif confidence_pct >= 60:
-        return f"🟡 ALTA ({confidence_pct_rounded}%)"      # Amarillo para confianza alta-media (60-74%)
-    elif confidence_pct >= 45:
-        return f"🟡 MEDIA ({confidence_pct_rounded}%)"     # Amarillo para confianza media (45-59%)
-    elif confidence_pct >= 30:
-        return f"🟠 BAJA ({confidence_pct_rounded}%)"      # Naranja para confianza baja-media (30-44%)
+    # Rangos ajustados según los datos históricos proporcionados
+    if confidence_pct >= 80:
+        return f"🟢 ALTA ({confidence_pct_rounded}%)"      # Error típico ≤5 puntos
+    elif confidence_pct >= 65:
+        return f"🟡 ALTA ({confidence_pct_rounded}%)"      # Error típico 6-10 puntos
+    elif confidence_pct >= 50:
+        return f"🟡 MEDIA ({confidence_pct_rounded}%)"     # Error típico 11-14 puntos
+    elif confidence_pct >= 35:
+        return f"🟠 BAJA ({confidence_pct_rounded}%)"      # Error típico 15-20 puntos
     else:
-        return f"🔴 MUY BAJA ({confidence_pct_rounded}%)"  # Rojo para muy baja confianza (<30%)
+        return f"🔴 MUY BAJA ({confidence_pct_rounded}%)"  # Error típico >20 puntos
 
 def save_predictions_markdown(predictions: pd.DataFrame, output_dir: Path) -> None:
     """
@@ -852,64 +876,41 @@ def save_predictions_markdown(predictions: pd.DataFrame, output_dir: Path) -> No
         markdown_content += f"- **Hora**: {game_time}\n"
         markdown_content += f"- **Estadio**: {arena}, {game.get('CITY', 'Ciudad no disponible')}\n\n"
         
-        # Sección de predicciones con confianza individual
+        # Sección de predicciones
         markdown_content += "#### 📊 Predicciones de Puntos\n"
-        markdown_content += f"- **{away_team}**: {away_score} puntos  {away_badge} ({away_prob*100:.1f}% confianza)\n"
-        markdown_content += f"- **{home_team}**: {home_score} puntos  {home_badge} ({home_prob*100:.1f}% confianza)\n"
+        # Extraer solo el emoji y el nivel de confianza (sin el porcentaje)
+        away_badge_parts = away_badge.split('(')
+        home_badge_parts = home_badge.split('(')
+        
+        # Formatear la línea para el equipo visitante
+        if len(away_badge_parts) > 1:
+            away_confidence = away_badge_parts[1].replace('%)', '').strip()
+            markdown_content += f"- **{away_team}**: {away_score} puntos  {away_badge_parts[0].strip()} ({away_confidence}%)\n"
+        else:
+            markdown_content += f"- **{away_team}**: {away_score} puntos  {away_badge}\n"
+            
+        # Formatear la línea para el equipo local
+        if len(home_badge_parts) > 1:
+            home_confidence = home_badge_parts[1].replace('%)', '').strip()
+            markdown_content += f"- **{home_team}**: {home_score} puntos  {home_badge_parts[0].strip()} ({home_confidence}%)\n"
+        else:
+            markdown_content += f"- **{home_team}**: {home_score} puntos  {home_badge}\n"
         
         # Sección de resumen del partido
         markdown_content += f"#### 🏆 Resumen del Partido\n"
-        # Calcular diferencia porcentual para el margen de victoria
-        if home_score > away_score:
-            margin_pct = (home_score / away_score - 1) * 100
-        else:
-            margin_pct = (away_score / home_score - 1) * 100
-            
-        markdown_content += f"- **Ganador probable**: {winner} (por {margin} puntos, {margin_pct:.1f}% de diferencia)\n"
-        markdown_content += f"- **Confianza general del pronóstico**: {confidence_badge} ({avg_confidence*100:.1f}%)\n"
-        
-        # Análisis detallado de confianza
-        markdown_content += "\n#### 🔍 Análisis de Confianza\n"
-        
-        # Función para obtener el mensaje de análisis de confianza
-        def get_confidence_analysis(team_name: str, prob: float, score: int, badge: str) -> str:
-            if prob >= 0.7:  # 70% o más
-                return f"- **{team_name}**: {badge} Alta confianza en la predicción de puntos. " + \
-                       f"El modelo tiene un 70% o más de certeza en este pronóstico.\n"
-            elif prob >= 0.6:  # 60-69%
-                return f"- **{team_name}**: {badge} Confianza moderada. " + \
-                       f"El rango probable es de {int(score - 5)} a {int(score + 5)} puntos.\n"
-            elif prob >= 0.45:  # 45-59%
-                return f"- **{team_name}**: {badge} Confianza limitada. " + \
-                       f"La predicción tiene una certeza moderada y podría variar.\n"
-            else:  # Menos de 45%
-                return f"- **{team_name}**: {badge} Baja confianza. " + \
-                       f"El modelo tiene poca certeza en esta predicción.\n"
-        # Análisis para el equipo local
-        markdown_content += get_confidence_analysis(home_team, home_prob, home_score, home_badge)
-        
-        # Análisis para el equipo visitante
-        markdown_content += get_confidence_analysis(away_team, away_prob, away_score, away_badge)
-        
-        # Análisis general
-        if avg_confidence >= 70:
-            markdown_content += "\n💡 **Análisis general**: Alta confianza en el pronóstico. "
-            markdown_content += "El modelo tiene un buen rendimiento con partidos de características similares.\n"
-        elif avg_confidence >= 60:
-            markdown_content += "\n💡 **Análisis general**: Confianza moderada. "
-            markdown_content += "El pronóstico es razonable, pero se recomienda considerar otros factores.\n"
-        else:
-            markdown_content += "\n⚠️ **Análisis general**: Baja confianza. "
-            markdown_content += "Se recomienda tomar esta predicción con precaución y considerar otros factores.\n"
+        # Mostrar solo la diferencia en puntos sin el porcentaje
+        markdown_content += f"- **Ganador probable**: {winner} (por {margin} puntos de diferencia)\n"
         
         markdown_content += "\n---\n\n"
     
-    # Añadir leyenda de colores
+    # Añadir leyenda de colores con rangos basados en datos históricos
     markdown_content += "## 🔍 Interpretación de los Niveles de Confianza\n\n"
-    markdown_content += "- 🟢 **Alta confianza (≥70%)**: El modelo tiene un historial preciso en predicciones similares.\n"
-    markdown_content += "- 🟡 **Confianza media (60-70%)**: La predicción es razonable, pero con cierta incertidumbre.\n"
-    markdown_content += "- 🔴 **Baja confianza (<60%)**: El modelo tiene poca certeza en esta predicción. Se recomienda precaución.\n\n"
-    markdown_content += "*Nota: Estos porcentajes representan la confianza en la predicción de puntos, no la probabilidad de victoria.*\n"
+    markdown_content += "- 🟢 **ALTA (≥80%)**: Máxima confianza. Error típico de ±5 puntos (33% local / 27% visitante).\n"
+    markdown_content += "- 🟡 **ALTA (65-79%)**: Buena confianza. Error típico de 6-10 puntos.\n"
+    markdown_content += "- 🟡 **MEDIA (50-64%)**: Confianza moderada. Error típico de 11-14 puntos.\n"
+    markdown_content += "- 🟠 **BAJA (35-49%)**: Baja confianza. Error típico de 15-20 puntos.\n"
+    markdown_content += "- 🔴 **MUY BAJA (<35%)**: Mínima confianza. Error típico mayor a 20 puntos.\n\n"
+    markdown_content += "*Nota: Los porcentajes representan la confianza en la predicción de puntos, basada en el rendimiento histórico del modelo. Un 80% de confianza significa que hay 1 en 5 posibilidades de que el error sea mayor a 5 puntos.*\n"
     
     # Escribir el archivo
     try:
