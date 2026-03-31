@@ -181,21 +181,29 @@ class NBADataFetcher:
                 print(f"⚠️  Intento {attempt + 1}/{self.max_retries} fallido. Reintentando en {wait_time} segundos...")
                 time.sleep(wait_time)
     
-    def get_season_games(self, season: str, season_type: str = 'Regular Season') -> Optional[pd.DataFrame]:
-        """Obtiene todos los partidos de una temporada y tipo de temporada."""
-        print(f"\n📅 Procesando temporada: {season} - {season_type}")
-        print("-" * 50)
+    def get_season_games(self, season='2024-25', season_type='Regular Season'):
+        """
+        Obtiene todos los partidos de una temporada y tipo específico.
         
+        Args:
+            season (str): Temporada en formato 'YYYY-YY'
+            season_type (str): Tipo de temporada ('Regular Season', 'Playoffs', 'Pre Season', 'All-Star', 'IST' o 'ALL')
+                               Si es 'ALL', obtiene todos los partidos disponibles sin filtrar.
+        """
         endpoint = 'leaguegamefinder'
+        
         params = {
-            'LeagueID': '00',  # NBA
+            'LeagueID': '00',
             'Season': season,
-            'SeasonType': season_type,
-            'PlayerOrTeam': 'T',  # Team stats
+            'PlayerOrTeam': 'T', # T = Team, P = Player
             'Sorter': 'DATE',
             'Direction': 'DESC'
         }
         
+        # Solo agregar SeasonType si no es 'ALL'
+        if season_type and season_type != 'ALL':
+            params['SeasonType'] = season_type
+            
         data = self.make_request(endpoint, params)
         if not data:
             return None
@@ -331,8 +339,29 @@ class NBADataFetcher:
         # Crear copia para no modificar el original
         df_processed = df.copy()
         
-        # Determinar local y visitante
-        df_processed['IS_HOME'] = df_processed['MATCHUP'].str.contains('vs.').astype(int)
+        # Determinar local y visitante por cada partido (maneja casos mixtos de cancha neutral)
+        def mark_home_team(group):
+            # Si hay al menos un 'vs.', usamos la lógica estándar
+            if group['MATCHUP'].str.contains('vs.').any():
+                group['IS_HOME'] = group['MATCHUP'].str.contains('vs.').astype(int)
+            else:
+                # Caso cancha neutral: ambos teams tienen '@'
+                # El equipo después del '@' se considera "local" para efectos de la base de datos
+                matchup = group['MATCHUP'].iloc[0]
+                if ' @ ' in matchup:
+                    home_team_abbr = matchup.split(' @ ')[1].strip()
+                    group['IS_HOME'] = (group['TEAM_ABBREVIATION'] == home_team_abbr).astype(int)
+                    
+                    # Si aún no hay local (raro), asignamos al primero
+                    if group['IS_HOME'].sum() == 0:
+                        group.iloc[0, group.columns.get_loc('IS_HOME')] = 1
+                else:
+                    # No hay '@' ni 'vs.', asignamos al primero
+                    group['IS_HOME'] = 0
+                    group.iloc[0, group.columns.get_loc('IS_HOME')] = 1
+            return group
+            
+        df_processed = df_processed.groupby('GAME_ID', group_keys=False).apply(mark_home_team)
         
         # Separar en local y visitante
         home_games = df_processed[df_processed['IS_HOME'] == 1].copy()
@@ -723,23 +752,28 @@ class NBADataFetcher:
                     curr_loc = 'AWAY'
                 
                 # Obtener coordenadas
-                if prev_abbr in NBA_STADIUMS and curr_abbr in NBA_STADIUMS:
-                    # Si el equipo jugó en casa en el partido anterior, usamos su estadio
-                    if prev_loc == 'HOME':
-                        lat1, lon1 = NBA_STADIUMS[prev_abbr]
-                    else:
-                        # Si fue visitante, usamos el estadio del oponente
-                        opp_abbr = prev_abbr if prev_abbr != curr_abbr else prev_game['TEAM_ABBREVIATION_HOME']
-                        lat1, lon1 = NBA_STADIUMS.get(opp_abbr, (0, 0))
-                    
-                    # Para el partido actual, usamos el estadio del partido
-                    lat2, lon2 = NBA_STADIUMS[curr_abbr] if curr_loc == 'HOME' else \
-                                NBA_STADIUMS.get(curr_game['TEAM_ABBREVIATION_HOME'], (0, 0))
-                    
-                    # Calcular distancia solo si las coordenadas son válidas
-                    if lat1 != 0 and lon1 != 0 and lat2 != 0 and lon2 != 0:
-                        distance = haversine(lat1, lon1, lat2, lon2)
-                        distances[i] = distance
+                # Si el equipo jugó en casa en el partido anterior, usamos su estadio
+                if prev_loc == 'HOME':
+                    coords1 = NBA_STADIUMS.get(prev_abbr)
+                else:
+                    # Si fue visitante, usamos el estadio del oponente
+                    opp_abbr = prev_abbr if prev_abbr != curr_abbr else prev_game['TEAM_ABBREVIATION_HOME']
+                    coords1 = NBA_STADIUMS.get(opp_abbr)
+                
+                lat1, lon1 = coords1 if coords1 else (0, 0)
+                
+                # Para el partido actual, usamos el estadio del partido
+                if curr_loc == 'HOME':
+                    coords2 = NBA_STADIUMS.get(curr_abbr)
+                else:
+                    coords2 = NBA_STADIUMS.get(curr_game['TEAM_ABBREVIATION_HOME'])
+                
+                lat2, lon2 = coords2 if coords2 else (0, 0)
+                
+                # Calcular distancia solo si las coordenadas son válidas
+                if lat1 != 0 and lon1 != 0 and lat2 != 0 and lon2 != 0:
+                    distance = haversine(lat1, lon1, lat2, lon2)
+                    distances[i] = distance
             
             return distances
         
@@ -764,20 +798,23 @@ class NBADataFetcher:
                     # Obtener las ubicaciones de los partidos
                     if is_home_prev:
                         prev_abbr = prev_game['TEAM_ABBREVIATION_HOME']
-                        prev_lat, prev_lon = NBA_STADIUMS[prev_abbr]
+                        prev_loc = NBA_STADIUMS.get(prev_abbr)
                     else:
                         prev_opp_abbr = prev_game['TEAM_ABBREVIATION_HOME']
-                        prev_lat, prev_lon = NBA_STADIUMS[prev_opp_abbr]
+                        prev_loc = NBA_STADIUMS.get(prev_opp_abbr)
                     
                     if is_home_curr:
                         curr_abbr = curr_game['TEAM_ABBREVIATION_HOME']
-                        curr_lat, curr_lon = NBA_STADIUMS[curr_abbr]
+                        curr_loc = NBA_STADIUMS.get(curr_abbr)
                     else:
                         curr_opp_abbr = curr_game['TEAM_ABBREVIATION_HOME']
-                        curr_lat, curr_lon = NBA_STADIUMS[curr_opp_abbr]
+                        curr_loc = NBA_STADIUMS.get(curr_opp_abbr)
                     
-                    # Calcular distancia
-                    distance = haversine(prev_lat, prev_lon, curr_lat, curr_lon)
+                    # Calcular distancia solo si ambos estadios están definidos
+                    if prev_loc and curr_loc:
+                        distance = haversine(prev_loc[0], prev_loc[1], curr_loc[0], curr_loc[1])
+                    else:
+                        distance = 0.0
                     
                     # Asignar la distancia al partido actual
                     game_id = curr_game['GAME_ID']

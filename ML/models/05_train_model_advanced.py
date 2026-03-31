@@ -23,22 +23,17 @@ Uso:
 import os
 import random
 import numpy as np
-import tensorflow as tf
 
 # Establecer semillas para reproducibilidad
 SEED = 42
 os.environ['PYTHONHASHSEED'] = str(SEED)
 random.seed(SEED)
 np.random.seed(SEED)
-tf.random.set_seed(SEED)
 
-# Configurar semillas para entornos paralelos
-os.environ['TF_DETERMINISTIC_OPS'] = '1'
-os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
-
-# Configurar semillas para scikit-learn
-from sklearn import config
-config.set_config(assume_finite=True)
+# Desactivar paralelismo para evitar errores de mutex en macOS
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
 # Módulos estándar
 import argparse
@@ -141,27 +136,56 @@ def get_feature_columns(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
 def temporal_split(
     df: pd.DataFrame, holdout_season: str
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Divide los datos en conjuntos de entrenamiento y prueba por temporada."""
+    """Divide los datos en conjuntos de entrenamiento y prueba usando split 80/20 en la temporada actual.
+    
+    Estrategia:
+    - Entrenamiento: Todas las temporadas anteriores + 80% de la temporada actual
+    - Prueba: 20% final de la temporada actual
+    """
     if "SEASON" not in df.columns:
         raise ValueError("La columna SEASON es necesaria para el split temporal")
+    if "GAME_DATE" not in df.columns:
+        raise ValueError("La columna GAME_DATE es necesaria para el split temporal")
 
     # Convertir SEASON a numérico si es necesario
     df["SEASON"] = pd.to_numeric(df["SEASON"], errors='coerce')
+    df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"], errors='coerce')
     
     if holdout_season == "latest":
-        test_season = int(df["SEASON"].max())
+        current_season = int(df["SEASON"].max())
     else:
-        test_season = int(holdout_season)
+        current_season = int(holdout_season)
 
-    train_df = df[df["SEASON"] < test_season].copy()
-    test_df = df[df["SEASON"] == test_season].copy()
+    # Obtener datos históricos (todas las temporadas anteriores)
+    historical_df = df[df["SEASON"] < current_season].copy()
+    
+    # Obtener datos de la temporada actual y ordenar por fecha
+    current_season_df = df[df["SEASON"] == current_season].copy()
+    current_season_df = current_season_df.sort_values("GAME_DATE")
+    
+    # Split 80/20 en la temporada actual
+    split_ratio = 0.80
+    split_idx = int(len(current_season_df) * split_ratio)
+    
+    train_current = current_season_df.iloc[:split_idx]
+    test_current = current_season_df.iloc[split_idx:]
+    
+    # Combinar históricos + 80% de temporada actual para entrenamiento
+    train_df = pd.concat([historical_df, train_current], ignore_index=True)
+    test_df = test_current.copy()
 
     if train_df.empty or test_df.empty:
         raise ValueError(
-            f"Split inválido: train({len(train_df)}), test({len(test_df)}) para holdout {test_season}"
+            f"Split inválido: train({len(train_df)}), test({len(test_df)}) para temporada {current_season}"
         )
 
-    print(f"✅ Split temporal: train={train_df['SEASON'].min()}-{train_df['SEASON'].max()}, test={test_season}")
+    print(f"✅ Split temporal mejorado (80/20):")
+    print(f"   - Entrenamiento: SEASON {int(historical_df['SEASON'].min())}-{int(historical_df['SEASON'].max())} ({len(historical_df)} partidos)")
+    print(f"                  + SEASON {current_season} primeros 80% ({len(train_current)} partidos)")
+    print(f"                  = TOTAL: {len(train_df)} partidos")
+    print(f"   - Prueba: SEASON {current_season} últimos 20% ({len(test_df)} partidos)")
+    print(f"             Desde {test_df['GAME_DATE'].min().strftime('%Y-%m-%d')} hasta {test_df['GAME_DATE'].max().strftime('%Y-%m-%d')}")
+    
     return train_df, test_df
 
 
@@ -170,15 +194,17 @@ def build_models(models_to_try: List[str]) -> Dict[str, object]:
     models = {}
     
     if "rf" in models_to_try:
+        # n_jobs=1 para evitar errores de mutex en macOS
         models["random_forest"] = RandomForestRegressor(
             n_estimators=200,
             max_depth=10,
             min_samples_split=5,
-            n_jobs=-1,
+            n_jobs=1,
             random_state=42
         )
     
     if "xgb" in models_to_try:
+        # n_jobs=1 para evitar errores de mutex en macOS
         models["xgboost"] = XGBRegressor(
             n_estimators=200,
             max_depth=6,
@@ -186,7 +212,7 @@ def build_models(models_to_try: List[str]) -> Dict[str, object]:
             subsample=0.8,
             colsample_bytree=0.8,
             random_state=42,
-            n_jobs=-1
+            n_jobs=1
         )
     
     if not models:

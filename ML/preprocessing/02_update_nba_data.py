@@ -109,10 +109,14 @@ class NBADataUpdater:
             logger.info("🏆 Buscando partidos de playoffs...")
             playoff_games = fetcher.get_season_games(season=season, season_type='Playoffs')
             
+            # Buscar todos los partidos para capturar Copa NBA y otros
+            logger.info("🏆 Buscando partidos de Copa NBA y otros...")
+            all_types_games = fetcher.get_season_games(season=season, season_type='ALL')
+            
             # Combinar partidos
             all_games = []
             
-            for games, season_type in [(regular_games, 'Regular Season'), (playoff_games, 'Playoffs')]:
+            for games, season_type in [(regular_games, 'Regular Season'), (playoff_games, 'Playoffs'), (all_types_games, 'NBA Cup/Other')]:
                 if games is not None and not games.empty:
                     # Filtrar partidos nuevos
                     if 'GAME_DATE' in games.columns:
@@ -122,7 +126,7 @@ class NBADataUpdater:
                     
                     if not games.empty:
                         # Procesar partidos con estadísticas de equipo
-                        logger.info(f"🔄 Procesando {len(games)} partidos de {season_type}...")
+                        logger.info(f"🔄 Procesando {len(games)/2} partidos de {season_type}...")
                         processed_games = fetcher.process_games_data(games, team_stats)
                         
                         if processed_games is not None and not processed_games.empty:
@@ -138,7 +142,7 @@ class NBADataUpdater:
             # Combinar todos los partidos
             if all_games:
                 new_data = pd.concat(all_games, ignore_index=True)
-                logger.info(f"✅ Total de partidos nuevos: {len(new_data)}")
+                logger.info(f"✅ Total de equipos jugando: {len(new_data)}")
                 return new_data
             else:
                 logger.info("ℹ️ No se encontraron partidos nuevos")

@@ -10,22 +10,17 @@ para predecir resultados de partidos de la NBA.
 import os
 import random
 import numpy as np
-import tensorflow as tf
 
 # Establecer semillas para reproducibilidad
 SEED = 42
 os.environ['PYTHONHASHSEED'] = str(SEED)
 random.seed(SEED)
 np.random.seed(SEED)
-tf.random.set_seed(SEED)
 
-# Configurar semillas para entornos paralelos
-os.environ['TF_DETERMINISTIC_OPS'] = '1'
-os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
-
-# Configurar semillas para scikit-learn
-from sklearn import config
-config.set_config(assume_finite=True)
+# Desactivar paralelismo para evitar errores de mutex en macOS
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
 # Módulos estándar
 import logging
@@ -147,13 +142,14 @@ def train_models(X: pd.DataFrame, y: pd.DataFrame, test_size: float = 0.2,
         logger.info(f"Entrenando modelo para {target}...")
         
         # Crear y entrenar modelo
+        # n_jobs=1 para evitar errores de mutex en macOS
         model = RandomForestRegressor(
             n_estimators=100,
             max_depth=10,
             min_samples_split=5,
             min_samples_leaf=2,
             random_state=random_state,
-            n_jobs=-1
+            n_jobs=1
         )
         
         model.fit(X_train, y_train[target])

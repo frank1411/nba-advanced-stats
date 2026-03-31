@@ -40,26 +40,13 @@ os.environ['PYTHONHASHSEED'] = str(SEED)
 random.seed(SEED)
 np.random.seed(SEED)
 
+# Desactivar paralelismo para evitar errores de mutex en macOS
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+
 # Configuración de numpy
 np.seterr(all='warn')
-
-# Configuración de TensorFlow (si está disponible)
-try:
-    import tensorflow as tf
-    tf.random.set_seed(SEED)
-    os.environ['TF_DETERMINISTIC_OPS'] = '1'
-    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
-    logger.info("TensorFlow configurado con semilla determinista")
-except ImportError:
-    logger.warning("TensorFlow no está instalado. Algunas funcionalidades pueden no estar disponibles.")
-
-# Configuración de scikit-learn
-try:
-    from sklearn import set_config
-    set_config(assume_finite=True, working_memory=1024)  # 1GB de memoria para scikit-learn
-    logger.info("scikit-learn configurado correctamente")
-except (ImportError, AttributeError) as e:
-    logger.warning(f"No se pudo configurar scikit-learn: {str(e)}")
 
 # Resto de importaciones de terceros
 try:
@@ -92,6 +79,72 @@ PREDICTIONS_DIR = DATA_DIR / "predictions"
 # Asegurar que los directorios existan
 PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
 PREDICTIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+# =============================================================================
+# CONSTANTES Y FUNCIONES DE APOYO PARA CARACTERÍSTICAS
+# =============================================================================
+
+# Ubicaciones de los estadios de la NBA (latitud, longitud)
+NBA_STADIUMS = {
+    'ATL': (33.7573, -84.3963),    # State Farm Arena
+    'BOS': (42.3662, -71.0621),    # TD Garden
+    'BKN': (40.6826, -73.9754),    # Barclays Center
+    'CHA': (35.2251, -80.8392),    # Spectrum Center
+    'CHI': (41.8806, -87.6742),    # United Center
+    'CLE': (41.4965, -81.6881),    # Rocket Mortgage FieldHouse
+    'DAL': (32.7903, -96.8103),    # American Airlines Center
+    'DEN': (39.7487, -105.008),    # Ball Arena
+    'DET': (42.6966, -83.2453),    # Little Caesars Arena
+    'GSW': (37.7679, -122.3876),   # Chase Center
+    'HOU': (29.7508, -95.3621),    # Toyota Center
+    'IND': (39.7639, -86.1557),    # Gainbridge Fieldhouse
+    'LAC': (34.0430, -118.2673),   # Crypto.com Arena
+    'LAL': (34.0430, -118.2673),   # Crypto.com Arena
+    'MEM': (35.1380, -90.0504),    # FedExForum
+    'MIA': (25.7814, -80.1890),    # FTX Arena
+    'MIL': (43.0451, -87.9173),    # Fiserv Forum
+    'MIN': (44.9795, -93.2761),    # Target Center
+    'NOP': (29.9490, -90.0821),    # Smoothie King Center
+    'NYK': (40.7505, -73.9934),    # Madison Square Garden
+    'OKC': (35.4634, -97.5151),    # Paycom Center
+    'ORL': (28.5392, -81.3836),    # Amway Center
+    'PHI': (39.9012, -75.1720),    # Wells Fargo Center
+    'PHX': (33.4457, -112.0712),   # Footprint Center
+    'POR': (45.5316, -122.6668),   # Moda Center
+    'SAC': (38.5802, -121.4997),   # Golden 1 Center
+    'SAS': (29.4270, -98.4375),    # AT&T Center
+    'TOR': (43.6435, -79.3791),    # Scotiabank Arena
+    'UTA': (40.7683, -111.9011),   # Vivint Arena
+    'WAS': (38.8982, -77.0209)     # Capital One Arena
+}
+
+# Mapa de normalización de abreviaturas de equipos (ESPN/Other -> Database)
+TEAM_NORM_MAP = {
+    'NO': 'NOP',
+    'NY': 'NYK',
+    'GS': 'GSW',
+    'UTAH': 'UTA',
+    'WSH': 'WAS',
+    'PHX': 'PHX', # Asegurar consistencia
+    'SA': 'SAS',
+    'WSA': 'WAS', # Algunas fuentes usan esta
+    'BKN': 'BKN',
+    'CHA': 'CHA'
+}
+
+def haversine(lat1, lon1, lat2, lon2):
+    """Calcula la distancia en millas entre dos puntos en la Tierra."""
+    # Radio de la Tierra en millas
+    R = 3958.8
+    # Convertir grados a radianes
+    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+    # Diferencia de latitud y longitud
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    # Fórmula del semiverseno
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    c = 2 * math.asin(math.sqrt(a))
+    return R * c
 
 def load_models() -> tuple:
     """Carga los modelos entrenados y la lista de features."""
@@ -262,9 +315,9 @@ class NBADataFetcher:
                         'TEAM_ABBREVIATION_AWAY': away_abbrev,
                         'TEAM_NAME_HOME': home_team['team'].get('displayName', ''),
                         'TEAM_NAME_AWAY': away_team['team'].get('displayName', ''),
-                        'CITY_HOME': home_team['team'].get('location', ''),
+                        'CITY': home_team['team'].get('location', ''),
                         'CITY_AWAY': away_team['team'].get('location', ''),
-                        'ARENA': game['competitions'][0].get('venue', {}).get('fullName', 'Desconocido'),
+                        'ARENA_NAME': game['competitions'][0].get('venue', {}).get('fullName', 'Desconocido'),
                         'SEASON': season,
                         'SEASON_TYPE': 'Regular Season',
                         'GAME_STATUS_TEXT': game.get('status', {}).get('type', {}).get('shortDetail', 'Scheduled'),
@@ -393,139 +446,187 @@ def get_upcoming_schedule(days_ahead: int = 7) -> pd.DataFrame:
 
 def generate_features(upcoming_games: pd.DataFrame) -> pd.DataFrame:
     """
-    Genera características para los partidos futuros utilizando datos históricos.
-    
-    Args:
-        upcoming_games: DataFrame con los partidos programados
-        
-    Returns:
-        DataFrame con características generadas
+    Genera características robustas para los partidos futuros utilizando datos históricos.
+    Calcula descanso, viajes, tendencias y diferenciales requeridos por el modelo.
     """
     if upcoming_games.empty:
         return pd.DataFrame()
 
     # 1. Cargar datos históricos procesados
-    # Usar ruta relativa al directorio del proyecto
-    import os
-    print(f"Directorio actual: {os.getcwd()}")
-    # Ruta corregida: desde el directorio actual (ML/models) necesitamos subir un nivel (..) y luego entrar a data/processed
     processed_data_path = os.path.abspath(os.path.join(BASE_DIR, '..', 'ML', 'data', 'processed', 'nba_games_final.parquet'))
-    print(f"🔍 Buscando datos en: {processed_data_path}")
-    print(f"¿Existe el archivo? {os.path.exists(processed_data_path)}")
     try:
         historical_data = pd.read_parquet(processed_data_path)
+        historical_data['GAME_DATE'] = pd.to_datetime(historical_data['GAME_DATE'])
         print(f"✅ Datos históricos cargados: {len(historical_data)} partidos")
     except Exception as e:
         print(f"❌ Error al cargar datos históricos: {e}")
         return pd.DataFrame()
 
-    # 2. Función para obtener estadísticas de un equipo
-    def get_team_stats(team_abbr, is_home=True):
+    # 2. Función interna para obtener estadísticas y contexto de un equipo
+    def get_team_context(team_abbr, game_date, is_home=True):
         prefix = 'HOME' if is_home else 'AWAY'
-        team_col = f'TEAM_ABBREVIATION_{prefix}'
         
-        # Filtrar partidos del equipo
-        team_games = historical_data[historical_data[team_col] == team_abbr].copy()
-        if team_games.empty:
-            return {}
-            
-        # Ordenar por fecha (más reciente primero)
-        team_games = team_games.sort_values('GAME_DATE', ascending=False)
+        # Normalizar abreviatura
+        norm_abbr = TEAM_NORM_MAP.get(team_abbr, team_abbr)
+        if norm_abbr != team_abbr:
+            print(f"🔄 Normalizando equipo: {team_abbr} -> {norm_abbr}")
         
-        # Obtener estadísticas
+        # Filtrar todos los partidos donde participó el equipo (como local o visitante)
+        team_games = historical_data[
+            (historical_data['TEAM_ABBREVIATION_HOME'] == norm_abbr) | 
+            (historical_data['TEAM_ABBREVIATION_AWAY'] == norm_abbr)
+        ].copy()
+        
         stats = {}
+        metrics = ['PTS', 'OFF_RATING', 'DEF_RATING', 'NET_RATING', 'PACE', 'W_PCT', 'POINT_DIFF']
+
+        if team_games.empty:
+            # Fallback: Usar promedios de la liga si no hay historial
+            print(f"⚠️ Sin historial para {norm_abbr}. Usando promedios de la liga.")
+            for metric in metrics:
+                val = 110 if metric == 'PTS' or 'RATING' in metric else (100 if metric == 'PACE' else 0.5)
+                stats[f'{metric}_{prefix}'] = val
+                stats[f'{metric}_L10_{prefix}'] = val
+                stats[f'{metric}_{prefix}_TREND'] = 0.0
+            
+            stats.update({
+                f'GP_{prefix}': 82, f'W_{prefix}': 41, f'L_{prefix}': 41,
+                f'DAYS_REST_{prefix}': 3, f'IS_B2B_{prefix}': 0,
+                f'PREV_LOC_ABBR': norm_abbr
+            })
+            return stats
+            
+        # Ordenar por fecha (más reciente primero, pero anterior al partido actual)
+        team_games_past = team_games[team_games['GAME_DATE'] < game_date].sort_values('GAME_DATE', ascending=False)
         
-        # Estadísticas básicas
-        for col in ['PTS', 'OFF_RATING', 'DEF_RATING', 'NET_RATING', 'PACE', 'W_PCT']:
-            # Últimos 10 partidos o todos si hay menos de 10
-            last_10 = team_games.iloc[:10][f'{col}_{prefix}'].mean() if len(team_games) >= 10 else team_games[f'{col}_{prefix}'].mean()
-            stats[f'{col}_L10_{prefix}'] = last_10
-            stats[f'{col}_{prefix}'] = team_games[f'{col}_{prefix}'].mean()
+        # Si no hay partidos pasados en esta temporada/data, usar el historial general disponible
+        if team_games_past.empty:
+            team_games_past = team_games.sort_values('GAME_DATE', ascending=False)
+
+        last_game = team_games_past.iloc[0]
         
-        # Otras estadísticas
+        # --- Cálculo de Descanso ---
+        days_rest = (game_date - last_game['GAME_DATE']).days - 1
+        is_b2b = 1 if days_rest == 0 else 0
+        
+        # --- Cálculo de Viaje ---
+        if last_game['TEAM_ABBREVIATION_HOME'] == norm_abbr:
+            prev_loc_abbr = last_game['TEAM_ABBREVIATION_HOME']
+        else:
+            prev_loc_abbr = last_game['TEAM_ABBREVIATION_HOME'] # El local del partido anterior
+            
+        # --- Estadísticas de Rendimiento ---
+        role_games = historical_data[historical_data[f'TEAM_ABBREVIATION_{prefix}'] == norm_abbr].sort_values('GAME_DATE', ascending=False)
+        
+        if role_games.empty:
+            # Si no ha jugado en ese rol, usar todos sus partidos
+            role_games = team_games_past
+        
+        for metric in metrics:
+            col = f'{metric}_{prefix}'
+            if col not in role_games.columns:
+                # Buscar columna alternativa si el prefijo no coincide (ej. el equipo siempre fue visitante en la data)
+                alt_prefix = 'AWAY' if prefix == 'HOME' else 'HOME'
+                col = f'{metric}_{alt_prefix}'
+            
+            if col in role_games.columns:
+                stats[f'{metric}_{prefix}'] = role_games[col].mean()
+                stats[f'{metric}_L10_{prefix}'] = role_games[col].iloc[:10].mean() if len(role_games) >= 10 else role_games[col].mean()
+                stats[f'{metric}_{prefix}_TREND'] = stats[f'{metric}_L10_{prefix}'] - stats[f'{metric}_{prefix}']
+            else:
+                # Fallback para la métrica individual
+                stats[f'{metric}_{prefix}'] = 110 if metric in ['PTS', 'OFF_RATING', 'DEF_RATING'] else 0
+                stats[f'{metric}_L10_{prefix}'] = stats[f'{metric}_{prefix}']
+                stats[f'{metric}_{prefix}_TREND'] = 0
+
         stats.update({
-            f'GP_{prefix}': team_games[f'GP_{prefix}'].iloc[0] if len(team_games) > 0 else 0,
-            f'W_{prefix}': team_games[f'W_{prefix}'].iloc[0] if len(team_games) > 0 else 0,
-            f'L_{prefix}': team_games[f'L_{prefix}'].iloc[0] if len(team_games) > 0 else 0,
+            f'GP_{prefix}': role_games[f'GP_{prefix}'].iloc[0] if f'GP_{prefix}' in role_games.columns else 0,
+            f'W_{prefix}': role_games[f'W_{prefix}'].iloc[0] if f'W_{prefix}' in role_games.columns else 0,
+            f'L_{prefix}': role_games[f'L_{prefix}'].iloc[0] if f'L_{prefix}' in role_games.columns else 0,
+            f'DAYS_REST_{prefix}': max(0, days_rest),
+            f'IS_B2B_{prefix}': is_b2b,
+            f'PREV_LOC_ABBR': prev_loc_abbr
         })
         
         return stats
 
-    # 3. Aplicar a cada partido
+    # 3. Procesar cada partido programado
     features_list = []
     for _, game in upcoming_games.iterrows():
-        home_team = game['TEAM_ABBREVIATION_HOME']
-        away_team = game['TEAM_ABBREVIATION_AWAY']
+        g_date = pd.to_datetime(game['GAME_DATE'])
+        # Normalizar nombres para la búsqueda
+        home_team = TEAM_NORM_MAP.get(game['TEAM_ABBREVIATION_HOME'], game['TEAM_ABBREVIATION_HOME'])
+        away_team = TEAM_NORM_MAP.get(game['TEAM_ABBREVIATION_AWAY'], game['TEAM_ABBREVIATION_AWAY'])
         
-        home_stats = get_team_stats(home_team, is_home=True)
-        away_stats = get_team_stats(away_team, is_home=False)
+        h_stats = get_team_context(home_team, g_date, is_home=True)
+        a_stats = get_team_context(away_team, g_date, is_home=False)
         
-        # Combinar estadísticas
+        # No usamos h_stats o a_stats vacíos, la función interna siempre devuelve datos (gracias al fallback)
+            
+        # --- Cálculo de Distancia de Viaje (Final) ---
+        h_prev_loc = h_stats.pop('PREV_LOC_ABBR')
+        h_prev_lat, h_prev_lon = NBA_STADIUMS.get(h_prev_loc, (0,0))
+        h_curr_lat, h_curr_lon = NBA_STADIUMS.get(home_team, (0,0))
+        h_travel = haversine(h_prev_lat, h_prev_lon, h_curr_lat, h_curr_lon) if h_prev_lat != 0 else 0
+        
+        a_prev_loc = a_stats.pop('PREV_LOC_ABBR')
+        a_prev_lat, a_prev_lon = NBA_STADIUMS.get(a_prev_loc, (0,0))
+        a_curr_lat, a_curr_lon = NBA_STADIUMS.get(home_team, (0,0)) # Sede del partido
+        a_travel = haversine(a_prev_lat, a_prev_lon, a_curr_lat, a_curr_lon) if a_prev_lat != 0 else 0
+        
         game_features = {
             **game.to_dict(),
-            **home_stats,
-            **away_stats
+            **h_stats,
+            **a_stats,
+            'TEAM_ABBREVIATION_HOME': home_team,  # Asegurar nombres normalizados
+            'TEAM_ABBREVIATION_AWAY': away_team,
+            'TRAVEL_DISTANCE_HOME': h_travel,
+            'TRAVEL_DISTANCE_AWAY': a_travel,
+            'IS_HOME': 1
         }
         features_list.append(game_features)
     
     if not features_list:
         return pd.DataFrame()
         
-    features = pd.DataFrame(features_list)
+    df = pd.DataFrame(features_list)
     
-    # 4. Calcular características diferenciales
-    for metric in ['PTS', 'OFF_RATING', 'DEF_RATING', 'NET_RATING', 'PACE', 'W_PCT']:
-        for suffix in ['', '_L10']:
-            home_col = f'{metric}{suffix}_HOME'
-            away_col = f'{metric}{suffix}_AWAY'
-            
-            if home_col in features.columns and away_col in features.columns:
-                # Diferencia absoluta
-                features[f'{metric}{suffix}_DIFF'] = features[home_col] - features[away_col]
-                
-                # Diferencia porcentual (evitar división por cero)
-                denominator = (features[home_col] + features[away_col]) / 2 + 1e-10
-                features[f'{metric}{suffix}_PCT_DIFF'] = (features[home_col] - features[away_col]) / denominator
+    # 4. Características Diferenciales
+    for m in ['PTS', 'OFF_RATING', 'DEF_RATING', 'NET_RATING', 'PACE', 'W_PCT', 'POINT_DIFF']:
+        for s in ['', '_L10']:
+            h_col, a_col = f'{m}{s}_HOME', f'{m}{s}_AWAY'
+            if h_col in df.columns and a_col in df.columns:
+                df[f'{m}{s}_DIFF'] = df[h_col] - df[a_col]
+                df[f'{m}{s}_PCT_DIFF'] = (df[h_col] - df[a_col]) / ((df[h_col] + df[a_col]) / 2 + 1e-10)
+
+    # 5. Tendencias y otros específicos
+    for m in ['OFF_RATING', 'DEF_RATING', 'NET_RATING', 'PACE']:
+        df[f'{m}_TREND_DIFF'] = df[f'{m}_HOME_TREND'] - df[f'{m}_AWAY_TREND']
+        
+    df['DAYS_REST_DIFF'] = df['DAYS_REST_HOME'] - df['DAYS_REST_AWAY']
+    df['B2B_ADVANTAGE'] = df['IS_B2B_HOME'].astype(int) - df['IS_B2B_AWAY'].astype(int)
+    df['TRAVEL_DISTANCE_DIFF'] = df['TRAVEL_DISTANCE_HOME'] - df['TRAVEL_DISTANCE_AWAY']
+    df['GP_DIFF'] = df['GP_HOME'] - df['GP_AWAY']
+    df['W_DIFF'] = df['W_HOME'] - df['W_AWAY']
+    df['L_DIFF'] = df['L_HOME'] - df['L_AWAY']
+    df['WIN_STREAK_DIFF'] = df['W_PCT_L10_HOME'] - df['W_PCT_L10_AWAY']
     
-    # 5. Asegurar que las columnas requeridas estén presentes
-    required_columns = [
-        'TEAM_ABBREVIATION_HOME', 
-        'TEAM_ABBREVIATION_AWAY',
-        'GAME_DATE',
-        'PTS_HOME', 'PTS_AWAY',
-        'OFF_RATING_HOME', 'OFF_RATING_AWAY',
-        'DEF_RATING_HOME', 'DEF_RATING_AWAY',
-        'NET_RATING_HOME', 'NET_RATING_AWAY',
-        'PACE_HOME', 'PACE_AWAY',
-        'W_PCT_HOME', 'W_PCT_AWAY'
-    ]
-    
-    # Verificar columnas faltantes
-    missing_columns = [col for col in required_columns if col not in features.columns]
-    if missing_columns:
-        print(f"⚠️ Advertencia: Faltan columnas: {missing_columns}")
-        # Rellenar con valores por defecto si es necesario
-        for col in missing_columns:
-            if col.endswith('_HOME') or col.endswith('_AWAY'):
-                default_value = 100 if 'RATING' in col else 0
-                features[col] = default_value
-    
-    # 6. Añadir características adicionales
-    features['IS_HOME'] = 1  # Para consistencia con el modelo
-    features['OPPONENT_TEAM_ABBREVIATION'] = features['TEAM_ABBREVIATION_AWAY']
-    features['DAYS_SINCE_LAST_GAME'] = 3  # Valor predeterminado
-    features['IS_B2B'] = 0  # No hay información de back-to-back para partidos futuros
-    
-    # Asegurar que las columnas de fecha sean de tipo datetime
-    if 'GAME_DATE' in features.columns and not pd.api.types.is_datetime64_any_dtype(features['GAME_DATE']):
-        features['GAME_DATE'] = pd.to_datetime(features['GAME_DATE'])
-    
-    # Añadir características de tendencia (ejemplo)
-    features['HOME_WIN_PCT'] = 0.5  # Valor predeterminado
-    features['AWAY_WIN_PCT'] = 0.5  # Valor predeterminado
-    
-    print("✅ Características generadas para los partidos futuros")
-    return features
+    # Compatibilidad final
+    try:
+        with open(MODELS_DIR / "feature_list.json", "r") as f:
+            feature_data = json.load(f)
+        official_features = feature_data.get("features", [])
+        for col in official_features:
+            if col not in df.columns:
+                df[col] = 0.0
+    except Exception:
+        required = ['POINT_DIFF_L10_HOME', 'POINT_DIFF_L10_AWAY', 'POINT_DIFF_L10_DIFF', 'POINT_DIFF_L10_PCT_DIFF']
+        for col in required:
+            if col not in df.columns:
+                df[col] = 0.0
+
+    print(f"✅ Características generadas con éxito para {len(df)} partidos")
+    return df
 
 def calculate_score_probability(predicted_score: float, historical_mae: float, opponent_score: float = None, is_home: bool = True) -> float:
     """
@@ -669,30 +770,9 @@ def predict_games(model_home: Any, model_away: Any, features: pd.DataFrame, feat
     missing_cols = [col for col in feature_cols if col not in features.columns]
     if missing_cols:
         print(f"⚠️ Faltan columnas necesarias: {missing_cols}")
-        # Rellenar con valores más realistas basados en promedios de la NBA
+        # Rellenar con ceros o valores neutros para evitar errores del modelo
         for col in missing_cols:
-            if col.startswith('IS_'):
-                features[col] = 0
-            elif 'RATING' in col:
-                # Valores típicos de rating ofensivo/defensivo
-                if 'HOME' in col:
-                    features[col] = np.random.normal(110, 5)  # Media 110, desviación 5
-                else:
-                    features[col] = np.random.normal(108, 5)
-            elif 'PACE' in col:
-                features[col] = np.random.normal(100, 3)  # Posesiones por 48 minutos
-            elif 'PCT' in col or 'PCT_' in col:
-                features[col] = np.random.uniform(0.3, 0.7)  # Porcentajes entre 30% y 70%
-            elif 'DIFF' in col:
-                features[col] = np.random.normal(0, 5)  # Diferencias alrededor de 0
-            elif col in ['W_HOME', 'L_HOME', 'W_AWAY', 'L_AWAY']:
-                features[col] = np.random.randint(30, 50)  # Temporada regular típica
-            elif col in ['GP_HOME', 'GP_AWAY']:
-                features[col] = np.random.randint(70, 82)  # Partidos jugados
-            elif 'PTS' in col:
-                features[col] = np.random.normal(110, 10)  # Puntos por partido
-            else:
-                features[col] = 0.0
+            features[col] = 0.0
     
     # Seleccionar solo las columnas necesarias
     X = features[feature_cols].copy()
@@ -718,28 +798,7 @@ def predict_games(model_home: Any, model_away: Any, features: pd.DataFrame, feat
                 row['PRED_PTS_HOME']  # Puntaje del oponente
             )
         
-        # Añadir variabilidad si faltaban columnas
-        if missing_cols:
-            # Ajustar las predicciones para que sean más realistas
-            for i in range(len(features)):
-                # Añadir ruido aleatorio a las predicciones
-                home_noise = np.random.normal(0, 5)  # Ruido con media 0 y desviación 5
-                away_noise = np.random.normal(0, 5)
-                
-                # Asegurar que los puntajes sean realistas (entre 90 y 140)
-                features.at[i, 'PRED_PTS_HOME'] = np.clip(
-                    features.at[i, 'PRED_PTS_HOME'] + home_noise, 
-                    90, 140
-                )
-                features.at[i, 'PRED_PTS_AWAY'] = np.clip(
-                    features.at[i, 'PRED_PTS_AWAY'] + away_noise,
-                    90, 140
-                )
-                
-                # Asegurar que el margen no sea idéntico
-                margin = abs(features.at[i, 'PRED_PTS_HOME'] - features.at[i, 'PRED_PTS_AWAY'])
-                if margin < 2:  # Si el margen es muy pequeño, ajustarlo
-                    features.at[i, 'PRED_PTS_HOME'] += np.random.choice([-1, 1]) * np.random.uniform(2, 5)
+        # Nota: La variabilidad ya no se añade aquí para mantener la consistencia con los datos reales.
         
         # Redondear los puntos a números enteros
         features['PRED_PTS_HOME'] = features['PRED_PTS_HOME'].round().astype(int)
