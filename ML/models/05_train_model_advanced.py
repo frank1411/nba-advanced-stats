@@ -38,8 +38,11 @@ os.environ['OPENBLAS_NUM_THREADS'] = '1'
 # Módulos estándar
 import argparse
 import json
+import logging
 from pathlib import Path
 from typing import Dict, List, Tuple, Union
+
+logger = logging.getLogger(__name__)
 
 # Módulos de terceros
 import joblib
@@ -50,13 +53,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from xgboost import XGBRegressor
 
-# Configuración de rutas
-BASE_DIR = Path(__file__).parent.parent
-DATA_DIR = BASE_DIR / "data"
-PROCESSED_DATA_DIR = DATA_DIR / "processed"
-MODELS_DIR = BASE_DIR / "models"
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
+from ML.db import NBADatabase
 
+# Configuración de rutas
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
@@ -69,8 +68,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input",
         type=str,
-        default=str(PROCESSED_DATA_DIR / "nba_games_final.parquet"),
-        help="Ruta al parquet procesado con features",
+        default=None,
+        help="Ruta al archivo procesado con features (parquet/csv). Si no se indica, usa SQLite.",
     )
     parser.add_argument(
         "--holdout-season",
@@ -87,9 +86,21 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_data(path: str) -> pd.DataFrame:
+def load_data(path: str = None) -> pd.DataFrame:
     """Carga los datos y asegura los tipos correctos."""
-    df = pd.read_parquet(path)
+    if path is None or path == "sqlite":
+        logger.info("Cargando datos desde SQLite...")
+        with NBADatabase() as db:
+            df = db.get_final_games()
+    else:
+        path_obj = Path(path)
+        if path_obj.suffix == ".parquet":
+            df = pd.read_parquet(path)
+        elif path_obj.suffix == ".csv":
+            df = pd.read_csv(path)
+        else:
+            raise ValueError(f"Formato no soportado: {path}")
+        logger.info(f"Cargando datos desde {path}...")
     
     # Asegurar tipos básicos
     if "GAME_DATE" in df.columns:
@@ -114,13 +125,32 @@ def get_feature_columns(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
         "GAME_ID", "GAME_DATE", "SEASON", "SEASON_STR", "SEASON_TYPE",
         "TEAM_ID_HOME", "TEAM_ABBREVIATION_HOME",
         "TEAM_ID_AWAY", "TEAM_ABBREVIATION_AWAY",
-        
+
         # Targets y derivados
         "PTS_HOME", "PTS_AWAY", "POINT_DIFF", "HOME_POINT_DIFF", "AWAY_POINT_DIFF",
         "WL_HOME", "WL_AWAY", "TARGET", "POINT_DIFF_TARGET",
-        
+
         # Columnas con fuga (contienen información del partido actual)
-        "PTS_DIFF", "PTS_PCT_DIFF"
+        "PTS_DIFF", "PTS_PCT_DIFF",
+
+        # Columnas de predicciones guardadas en SQLite (data leakage)
+        "PREDICTION_OU_HOME", "PREDICTION_OU_AWAY", "PREDICTION_OU_TOTAL",
+        "CONFIDENCE_OU_HOME", "CONFIDENCE_OU_AWAY", "CONFIDENCE_OU_TOTAL",
+
+        # Líneas de apuestas (no disponibles al momento de predecir)
+        "LINE_OU_HOME", "LINE_OU_AWAY", "LINE_OU_TOTAL",
+
+        # Porcentajes con divisiones por cero que generan valores extremos
+        "NET_RATING_PCT_DIFF", "NET_RATING_L10_PCT_DIFF", "POINT_DIFF_L10_PCT_DIFF",
+
+        # Columnas de resultados (se calculan post-partido)
+        "RESULT_OU_HOME", "RESULT_OU_AWAY", "RESULT_OU_TOTAL",
+
+        # Columnas de tendencia que son todas ceros (se generan en preprocessing pero nunca se calculan)
+        "OFF_RATING_HOME_TREND", "OFF_RATING_AWAY_TREND", "OFF_RATING_TREND_DIFF",
+        "DEF_RATING_HOME_TREND", "DEF_RATING_AWAY_TREND", "DEF_RATING_TREND_DIFF",
+        "NET_RATING_HOME_TREND", "NET_RATING_AWAY_TREND", "NET_RATING_TREND_DIFF",
+        "PACE_HOME_TREND", "PACE_AWAY_TREND", "PACE_TREND_DIFF",
     }
     
     # Columnas de features (numéricas y no excluidas)
@@ -137,10 +167,11 @@ def temporal_split(
     df: pd.DataFrame, holdout_season: str
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Divide los datos en conjuntos de entrenamiento y prueba usando split 80/20 en la temporada actual.
-    
+
     Estrategia:
-    - Entrenamiento: Todas las temporadas anteriores + 80% de la temporada actual
-    - Prueba: 20% final de la temporada actual
+    - Entrenamiento: Todas las temporadas anteriores + 80% de la temporada actual (solo Regular Season)
+    - Prueba: 20% final de la temporada actual (solo Regular Season, sin Playoffs)
+    - Los partidos de Playoffs se excluyen del split pero se incluyen en el entrenamiento histórico
     """
     if "SEASON" not in df.columns:
         raise ValueError("La columna SEASON es necesaria para el split temporal")
@@ -150,7 +181,7 @@ def temporal_split(
     # Convertir SEASON a numérico si es necesario
     df["SEASON"] = pd.to_numeric(df["SEASON"], errors='coerce')
     df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"], errors='coerce')
-    
+
     if holdout_season == "latest":
         current_season = int(df["SEASON"].max())
     else:
@@ -158,18 +189,25 @@ def temporal_split(
 
     # Obtener datos históricos (todas las temporadas anteriores)
     historical_df = df[df["SEASON"] < current_season].copy()
-    
-    # Obtener datos de la temporada actual y ordenar por fecha
-    current_season_df = df[df["SEASON"] == current_season].copy()
+
+    # Obtener datos de la temporada actual — SOLO Regular Season para el split
+    current_season_df = df[
+        (df["SEASON"] == current_season) & (df["SEASON_TYPE"] == "Regular Season")
+    ].copy()
     current_season_df = current_season_df.sort_values("GAME_DATE")
-    
-    # Split 80/20 en la temporada actual
+
+    if current_season_df.empty:
+        raise ValueError(
+            f"No hay partidos de Regular Season en la temporada {current_season}"
+        )
+
+    # Split 80/20 en la temporada actual (solo Regular Season)
     split_ratio = 0.80
     split_idx = int(len(current_season_df) * split_ratio)
-    
+
     train_current = current_season_df.iloc[:split_idx]
     test_current = current_season_df.iloc[split_idx:]
-    
+
     # Combinar históricos + 80% de temporada actual para entrenamiento
     train_df = pd.concat([historical_df, train_current], ignore_index=True)
     test_df = test_current.copy()
@@ -179,7 +217,7 @@ def temporal_split(
             f"Split inválido: train({len(train_df)}), test({len(test_df)}) para temporada {current_season}"
         )
 
-    print(f"✅ Split temporal mejorado (80/20):")
+    print(f"✅ Split temporal mejorado (80/20, solo Regular Season):")
     print(f"   - Entrenamiento: SEASON {int(historical_df['SEASON'].min())}-{int(historical_df['SEASON'].max())} ({len(historical_df)} partidos)")
     print(f"                  + SEASON {current_season} primeros 80% ({len(train_current)} partidos)")
     print(f"                  = TOTAL: {len(train_df)} partidos")

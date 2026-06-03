@@ -76,6 +76,8 @@ DATA_DIR = BASE_DIR / "data"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 PREDICTIONS_DIR = DATA_DIR / "predictions"
 
+from ML.db import NBADatabase
+
 # Asegurar que los directorios existan
 PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
 PREDICTIONS_DIR.mkdir(parents=True, exist_ok=True)
@@ -299,10 +301,24 @@ class NBADataFetcher:
                     away_team_info = self.team_info.get(away_abbrev, {})
                     
                     # Obtener estadísticas de los equipos si están disponibles
-                    home_wins = int(home_team.get('record', [{}])[0].get('summary', '0-0').split('-')[0])
-                    home_losses = int(home_team.get('record', [{}])[0].get('summary', '0-0').split('-')[1])
-                    away_wins = int(away_team.get('record', [{}])[0].get('summary', '0-0').split('-')[0])
-                    away_losses = int(away_team.get('record', [{}])[0].get('summary', '0-0').split('-')[1])
+                    # Manejar formato nuevo (string directo) y antiguo (lista de diccionarios)
+                    def get_record_summary(record_data):
+                        """Extrae el resumen de victorias-derrotas del record."""
+                        if record_data is None:
+                            return '0-0'
+                        if isinstance(record_data, str):
+                            return record_data
+                        if isinstance(record_data, list) and len(record_data) > 0:
+                            return record_data[0].get('summary', '0-0')
+                        return '0-0'
+                    
+                    home_record = get_record_summary(home_team.get('record'))
+                    away_record = get_record_summary(away_team.get('record'))
+                    
+                    home_wins = int(home_record.split('-')[0])
+                    home_losses = int(home_record.split('-')[1])
+                    away_wins = int(away_record.split('-')[0])
+                    away_losses = int(away_record.split('-')[1])
                     
                     # Crear diccionario con los datos del partido
                     game_dict = {
@@ -452,12 +468,12 @@ def generate_features(upcoming_games: pd.DataFrame) -> pd.DataFrame:
     if upcoming_games.empty:
         return pd.DataFrame()
 
-    # 1. Cargar datos históricos procesados
-    processed_data_path = os.path.abspath(os.path.join(BASE_DIR, '..', 'ML', 'data', 'processed', 'nba_games_final.parquet'))
+    # 1. Cargar datos históricos procesados desde SQLite
     try:
-        historical_data = pd.read_parquet(processed_data_path)
+        with NBADatabase() as db:
+            historical_data = db.get_final_games()
         historical_data['GAME_DATE'] = pd.to_datetime(historical_data['GAME_DATE'])
-        print(f"✅ Datos históricos cargados: {len(historical_data)} partidos")
+        print(f"✅ Datos históricos cargados desde SQLite: {len(historical_data)} partidos")
     except Exception as e:
         print(f"❌ Error al cargar datos históricos: {e}")
         return pd.DataFrame()
@@ -597,7 +613,9 @@ def generate_features(upcoming_games: pd.DataFrame) -> pd.DataFrame:
             h_col, a_col = f'{m}{s}_HOME', f'{m}{s}_AWAY'
             if h_col in df.columns and a_col in df.columns:
                 df[f'{m}{s}_DIFF'] = df[h_col] - df[a_col]
-                df[f'{m}{s}_PCT_DIFF'] = (df[h_col] - df[a_col]) / ((df[h_col] + df[a_col]) / 2 + 1e-10)
+                # Evitar PCT_DIFF para columnas con valores cercanos a cero (división por cero)
+                if m in ['PTS', 'OFF_RATING', 'DEF_RATING', 'PACE', 'POINT_DIFF']:
+                    df[f'{m}{s}_PCT_DIFF'] = (df[h_col] - df[a_col]) / ((df[h_col] + df[a_col]) / 2 + 1e-10)
 
     # 5. Tendencias y otros específicos
     for m in ['OFF_RATING', 'DEF_RATING', 'NET_RATING', 'PACE']:
@@ -980,6 +998,70 @@ def save_predictions_markdown(predictions: pd.DataFrame, output_dir: Path) -> No
     except Exception as e:
         print(f"⚠️ No se pudo guardar el resumen en Markdown: {e}")
 
+def save_predictions_to_db(predictions: pd.DataFrame) -> int:
+    """
+    Guarda las predicciones del modelo (PREDICTION_OU_*) en la BD SQLite.
+
+    Busca los partidos en nba_games_final por fecha + equipos y actualiza
+    las columnas PREDICTION_OU_HOME, PREDICTION_OU_AWAY, PREDICTION_OU_TOTAL.
+
+    Returns:
+        Número de partidos actualizados.
+    """
+    if predictions.empty:
+        logger.warning("No hay predicciones para guardar en la BD")
+        return 0
+
+    with NBADatabase() as db:
+        df = db.get_final_games()
+
+    updated = 0
+    not_found = 0
+
+    for _, game in predictions.iterrows():
+        # Normalizar fecha
+        game_date = game.get('GAME_DATE')
+        if hasattr(game_date, 'strftime'):
+            date_str = game_date.strftime('%Y-%m-%d')
+        elif isinstance(game_date, str):
+            date_str = game_date
+        else:
+            date_str = datetime.now().strftime('%Y-%m-%d')
+
+        away = game.get('TEAM_ABBREVIATION_AWAY', '')
+        home = game.get('TEAM_ABBREVIATION_HOME', '')
+        pred_home = round(game.get('PRED_PTS_HOME', 0), 1)
+        pred_away = round(game.get('PRED_PTS_AWAY', 0), 1)
+        pred_total = round(pred_home + pred_away, 1)
+
+        # Buscar partido en la BD
+        mask = (
+            (df['GAME_DATE'] == pd.to_datetime(date_str)) &
+            (df['TEAM_ABBREVIATION_HOME'] == home) &
+            (df['TEAM_ABBREVIATION_AWAY'] == away)
+        )
+
+        match_idx = df[mask].index
+        if len(match_idx) == 0:
+            not_found += 1
+            logger.warning(f"No encontrado en BD: {away} @ {home} en {date_str}")
+            continue
+
+        idx = match_idx[0]
+        df.loc[idx, 'PREDICTION_OU_HOME'] = pred_home
+        df.loc[idx, 'PREDICTION_OU_AWAY'] = pred_away
+        df.loc[idx, 'PREDICTION_OU_TOTAL'] = pred_total
+        updated += 1
+
+    # Guardar cambios en la BD
+    if updated > 0:
+        with NBADatabase() as db:
+            db.insert_final_games(df, if_exists="replace")
+
+    logger.info(f"✅ Predicciones guardadas en BD: {updated} actualizados, {not_found} no encontrados")
+    return updated
+
+
 def main():
     """Función principal para mostrar y predecir partidos del día actual."""
     print("🏀 Predicciones de partidos de la NBA para hoy")
@@ -1049,10 +1131,16 @@ def main():
             pred_file = PREDICTIONS_DIR / f"predictions_{datetime.now().strftime('%Y%m%d')}.csv"
             predictions.to_csv(pred_file, index=False)
             print(f"\n💾 Predicciones guardadas en: {pred_file}")
-            
+
             # Guardar predicciones en formato Markdown
             save_predictions_markdown(predictions, PREDICTIONS_DIR)
-            
+
+            # Guardar predicciones en la BD (PREDICTION_OU_*)
+            print("\n💾 Guardando predicciones en SQLite...")
+            db_updated = save_predictions_to_db(predictions)
+            if db_updated > 0:
+                print(f"   ✅ {db_updated} predicciones actualizadas en nba_games_final")
+
         except Exception as e:
             print(f"\n⚠️ No se pudieron guardar las predicciones: {e}")
             
