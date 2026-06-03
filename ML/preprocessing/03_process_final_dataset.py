@@ -7,6 +7,7 @@ from typing import Optional, List, Dict
 import os
 from pathlib import Path
 import logging
+from ML.db import NBADatabase
 
 # Configurar logging
 logging.basicConfig(
@@ -24,31 +25,42 @@ class NBAFinalProcessor:
     def __init__(self, input_path: str = None, output_dir: str = None):
         """
         Inicializa el procesador de datos.
-        
+
         Args:
-            input_path: Ruta al archivo de entrada (opcional).
+            input_path: Ruta al archivo de entrada o "sqlite" para usar DB.
             output_dir: Directorio de salida (opcional).
         """
         # Obtener la ruta absoluta del directorio del script
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        
+
+        # Si input_path es "sqlite" o None, usar base de datos
+        self.use_db = (input_path is None) or (input_path == "sqlite")
+
         # Establecer rutas por defecto si no se proporcionan
         default_input = os.path.join(script_dir, '..', '..', 'ML', 'data', 'raw', 'nba_games_raw.parquet')
         default_output = os.path.join(script_dir, '..', '..', 'ML', 'data', 'processed')
-        
+
         self.input_path = input_path or default_input
         self.output_dir = output_dir or default_output
         self.df = None
-        
+
         # Asegurar que exista el directorio de salida
         os.makedirs(self.output_dir, exist_ok=True)
-        logger.info(f"Directorio de entrada: {self.input_path}")
+        if self.use_db:
+            logger.info("Fuente de datos: SQLite (nba.db)")
+        else:
+            logger.info(f"Directorio de entrada: {self.input_path}")
         logger.info(f"Directorio de salida: {self.output_dir}")
     
     def load_data(self) -> pd.DataFrame:
-        """Carga los datos desde el archivo de entrada."""
-        logger.info(f"Cargando datos desde {self.input_path}")
-        self.df = pd.read_parquet(self.input_path)
+        """Carga los datos desde SQLite o archivo de entrada."""
+        if self.use_db:
+            logger.info("Cargando datos desde SQLite...")
+            with NBADatabase() as db:
+                self.df = db.get_raw_games()
+        else:
+            logger.info(f"Cargando datos desde {self.input_path}")
+            self.df = pd.read_parquet(self.input_path)
         logger.info(f"Datos cargados. Filas: {len(self.df)}, Columnas: {len(self.df.columns)}")
         return self.df
     
@@ -194,35 +206,69 @@ class NBAFinalProcessor:
     
     def save_final_dataset(self, filename: str = "nba_games_final.parquet") -> str:
         """
-        Guarda el dataset final en formato Parquet.
-        
+        Guarda el dataset final en SQLite (y opcionalmente CSV para inspección).
+
+        Preserva registros de juegos futuros (placeholders con líneas y pronósticos)
+        que no están en los datos raw procesados, y mantiene todas las columnas
+        de la BD (LINE_OU_*, PREDICTION_OU_*, etc.).
+
         Args:
-            filename: Nombre del archivo de salida.
-            
+            filename: Nombre del archivo CSV de salida (la DB siempre se usa).
+
         Returns:
-            Ruta al archivo guardado.
+            Ruta al archivo CSV guardado.
         """
         if self.df is None:
             raise ValueError("No hay datos para guardar. Ejecuta load_data() y calculate_differential_features() primero.")
-            
-        # Asegurar que el directorio de salida existe
-        output_path = os.path.join(self.output_dir, filename)
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        
-        # Guardar el dataset
-        self.df.to_parquet(output_path, index=False)
-        
-        # Guardar también una versión CSV para fácil inspección (opcional)
-        csv_path = output_path.replace('.parquet', '.csv')
+
+        # Preservar juegos futuros y columnas extra de la BD
+        try:
+            with NBADatabase() as db:
+                existing_final = db.get_final_games()
+
+            if 'GAME_DATE' in existing_final.columns and 'GAME_DATE' in self.df.columns:
+                existing_final['GAME_DATE'] = pd.to_datetime(existing_final['GAME_DATE'])
+
+                # 1. Asegurar que self.df tenga TODAS las columnas de la BD (LINE_OU, PREDICTION_OU, etc.)
+                for col in existing_final.columns:
+                    if col not in self.df.columns:
+                        self.df[col] = None
+
+                # 2. Preservar placeholders del día actual (creados por 08_the_odds_api_recommendations.py)
+                today_str = pd.Timestamp.now().strftime('%Y-%m-%d')
+                future_mask = existing_final['GAME_DATE'] == pd.to_datetime(today_str)
+                # Excluir juegos ya procesados (que tienen PTS_HOME con resultado)
+                already_processed = self.df['GAME_DATE'] == pd.to_datetime(today_str)
+                today_in_final = existing_final[future_mask].copy()
+                if not today_in_final.empty:
+                    logger.info(f"Preservando {len(today_in_final)} juegos de hoy ({today_str}) con líneas/pronósticos")
+                    # Asegurar columnas consistentes
+                    for col in self.df.columns:
+                        if col not in today_in_final.columns:
+                            today_in_final[col] = None
+                    today_in_final = today_in_final[self.df.columns]
+                    # Combinar datos procesados + juegos de hoy
+                    self.df = pd.concat([self.df, today_in_final], ignore_index=True)
+        except Exception as e:
+            logger.warning(f"No se pudieron preservar juegos futuros: {e}")
+
+        # Guardar en SQLite
+        with NBADatabase() as db:
+            db.create_tables()
+            db.insert_final_games(self.df, if_exists="replace")
+            logger.info(f"Dataset final guardado en SQLite: {db.db_path}")
+
+        # Guardar también una versión CSV para fácil inspección
+        csv_path = os.path.join(self.output_dir, filename.replace('.parquet', '.csv'))
+        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
         self.df.to_csv(csv_path, index=False)
-        
+
         # Guardar metadatos
-        self._save_metadata(output_path)
-        
-        logger.info(f"Dataset final guardado en {output_path}")
+        self._save_metadata(csv_path)
+
         logger.info(f"Tamaño del dataset: {len(self.df)} filas x {len(self.df.columns)} columnas")
-        
-        return output_path
+
+        return csv_path
     
     def generate_final_dataset(self) -> str:
         """
@@ -301,35 +347,45 @@ class NBAFinalProcessor:
         
         # Guardar metadatos en un archivo JSON
         import json
-        metadata_path = output_path.replace('.parquet', '_metadata.json')
+        metadata_path = output_path.replace('.csv', '_metadata.json').replace('.parquet', '_metadata.json')
         with open(metadata_path, 'w') as f:
             json.dump(metadata, f, indent=2)
         
         logger.info(f"Metadatos guardados en {metadata_path}")
 
 def main():
-    """Función principal para ejecutar el procesamiento del dataset final."""
+    """Función principal para ejecutar el procesamiento del dataset final.
+
+    Flujo del pipeline:
+      02_update_nba_data.py  → nuevos juegos de la API → BD (raw)
+      03_process_final_dataset.py → features diferenciales → BD (final)
+      (líneas de apuestas) → BD
+      06_predict_upcoming_games.py → pronósticos → BD
+    """
     try:
         # Obtener rutas absolutas
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        input_path = os.path.join(script_dir, '..', '..', 'ML', 'data', 'raw', 'nba_games_raw.parquet')
         output_dir = os.path.join(script_dir, '..', '..', 'ML', 'data', 'processed')
-        
-        # Crear instancia del procesador con las rutas correctas
+
+        # FUENTE: SQLite (actualizado por 02_update_nba_data.py)
+        # Ya no se usa el parquet como fuente primaria
+        input_path = "sqlite"
+
+        # Crear instancia del procesador
         processor = NBAFinalProcessor(input_path=input_path, output_dir=output_dir)
-        
-        # Cargar datos
+
+        # Cargar datos desde SQLite
         processor.load_data()
-        
+
         # Calcular características diferenciales
         df_final = processor.calculate_differential_features()
-        
-        # Generar dataset final
+
+        # Generar dataset final (guarda en SQLite + CSV para inspección)
         output_path = processor.generate_final_dataset()
-        
+
         logger.info(f"Procesamiento completado. Dataset guardado en: {output_path}")
         return output_path
-        
+
     except Exception as e:
         logger.error(f"Error durante el procesamiento: {str(e)}", exc_info=True)
         raise

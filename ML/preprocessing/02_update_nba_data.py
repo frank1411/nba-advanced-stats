@@ -7,8 +7,10 @@ Este script se encarga de:
 2. Identificar la fecha del último partido registrado
 3. Descargar solo los partidos nuevos
 4. Actualizar el archivo de datos sin duplicados
+5. Calcular RESULT_OU_* y CONFIDENCE_OU_* para partidos con predicción + línea + resultado
 """
 import os
+import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -22,16 +24,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Configuración de rutas
-BASE_DIR = Path(__file__).parents[1]
-RAW_DATA_DIR = BASE_DIR / "data" / "raw"
-PROCESSED_DATA_DIR = BASE_DIR / "data" / "processed"
-RAW_DATA_FILE = RAW_DATA_DIR / "nba_games_raw.parquet"
-PROCESSED_DATA_FILE = PROCESSED_DATA_DIR / "nba_games_final.parquet"
-
-# Asegurar que existan los directorios
-RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
-PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
+from ML.db import NBADatabase
 
 class NBADataUpdater:
     def __init__(self):
@@ -40,28 +33,29 @@ class NBADataUpdater:
         self.last_game_date = None
         
     def load_existing_data(self) -> bool:
-        """Carga los datos existentes y establece la fecha del último partido."""
+        """Carga los datos existentes desde SQLite y establece la fecha del último partido."""
         try:
-            if RAW_DATA_FILE.exists():
-                self.existing_data = pd.read_parquet(RAW_DATA_FILE)
-                
-                # Convertir GAME_DATE a datetime si es necesario
-                if 'GAME_DATE' in self.existing_data.columns:
-                    if not pd.api.types.is_datetime64_any_dtype(self.existing_data['GAME_DATE']):
-                        self.existing_data['GAME_DATE'] = pd.to_datetime(self.existing_data['GAME_DATE'])
-                    
-                    # Obtener la fecha del último partido
-                    self.last_game_date = self.existing_data['GAME_DATE'].max()
-                    logger.info(f"📅 Último partido registrado: {self.last_game_date}")
+            with NBADatabase() as db:
+                if db.get_game_count("raw") > 0:
+                    self.existing_data = db.get_raw_games()
+
+                    # Convertir GAME_DATE a datetime si es necesario
+                    if 'GAME_DATE' in self.existing_data.columns:
+                        if not pd.api.types.is_datetime64_any_dtype(self.existing_data['GAME_DATE']):
+                            self.existing_data['GAME_DATE'] = pd.to_datetime(self.existing_data['GAME_DATE'])
+
+                        # Obtener la fecha del último partido
+                        self.last_game_date = self.existing_data['GAME_DATE'].max()
+                        logger.info(f"📅 Último partido registrado: {self.last_game_date}")
+                    else:
+                        logger.warning("No se encontró la columna 'GAME_DATE' en los datos existentes")
+
+                    return True
                 else:
-                    logger.warning("No se encontró la columna 'GAME_DATE' en los datos existentes")
-                    
-                return True
-            else:
-                logger.warning("No se encontró el archivo de datos existente. Se creará uno nuevo.")
-                self.existing_data = pd.DataFrame()
-                return False
-                
+                    logger.warning("No hay datos en la base de datos. Se crearán nuevos registros.")
+                    self.existing_data = pd.DataFrame()
+                    return False
+
         except Exception as e:
             logger.error(f"Error al cargar datos existentes: {e}")
             return False
@@ -155,10 +149,10 @@ class NBADataUpdater:
     def update_data(self, new_data: pd.DataFrame) -> bool:
         """
         Actualiza los datos existentes con los nuevos partidos.
-        
+
         Args:
             new_data: DataFrame con los nuevos partidos
-            
+
         Returns:
             bool: True si la actualización fue exitosa, False en caso contrario
         """
@@ -166,44 +160,41 @@ class NBADataUpdater:
             if new_data is None or new_data.empty:
                 logger.info("No hay datos nuevos para actualizar")
                 return False
-                
+
             # Asegurar que GAME_DATE sea datetime
             if 'GAME_DATE' in new_data.columns and not pd.api.types.is_datetime64_any_dtype(new_data['GAME_DATE']):
                 new_data['GAME_DATE'] = pd.to_datetime(new_data['GAME_DATE'])
-            
+
             # Filtrar partidos que ya existen (por si acaso)
             if not self.existing_data.empty and 'GAME_ID' in self.existing_data.columns and 'GAME_ID' in new_data.columns:
                 existing_ids = set(self.existing_data['GAME_ID'].unique())
                 new_data = new_data[~new_data['GAME_ID'].isin(existing_ids)]
-                
+
                 if new_data.empty:
                     logger.info("No hay partidos nuevos para agregar")
                     return False
-            
+
             # Combinar datos
             updated_data = pd.concat([self.existing_data, new_data], ignore_index=True)
-            
+
             # Eliminar duplicados por GAME_ID por si acaso
             if 'GAME_ID' in updated_data.columns:
                 updated_data = updated_data.drop_duplicates(subset=['GAME_ID'], keep='last')
-            
+
             # Ordenar por fecha
             if 'GAME_DATE' in updated_data.columns:
                 updated_data = updated_data.sort_values('GAME_DATE')
-            
-            # Guardar copia de seguridad
-            if RAW_DATA_FILE.exists():
-                backup_file = RAW_DATA_DIR / f"nba_games_raw_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.parquet"
-                self.existing_data.to_parquet(backup_file)
-                logger.info(f"✅ Copia de seguridad guardada en: {backup_file}")
-            
-            # Guardar datos actualizados
-            updated_data.to_parquet(RAW_DATA_FILE)
-            logger.info(f"✅ Datos actualizados guardados en: {RAW_DATA_FILE}")
-            logger.info(f"📊 Total de partidos en el archivo: {len(updated_data)}")
-            
+
+            # Guardar datos actualizados en SQLite
+            with NBADatabase() as db:
+                db.create_tables()
+                db.insert_raw_games(updated_data, if_exists="replace")
+
+            logger.info(f"✅ Datos actualizados guardados en SQLite: {db.db_path}")
+            logger.info(f"📊 Total de partidos: {len(updated_data)}")
+
             return True
-            
+
         except Exception as e:
             logger.error(f"Error al actualizar los datos: {e}")
             return False
@@ -216,8 +207,8 @@ def main():
     updater = NBADataUpdater()
     
     # Cargar datos existentes
-    if not updater.load_existing_data() and not RAW_DATA_FILE.exists():
-        logger.warning("No se encontraron datos existentes. Se creará un nuevo archivo con los datos más recientes.")
+    if not updater.load_existing_data():
+        logger.warning("No se encontraron datos existentes. Se crearán nuevos registros con los datos más recientes.")
     
     # Obtener la temporada actual (asumiendo que estamos en la temporada 2025-26)
     current_year = datetime.now().year
@@ -245,8 +236,81 @@ def main():
             logger.error("❌ Error al actualizar los datos")
     else:
         logger.info("ℹ️ No hay partidos nuevos para actualizar")
-    
+
+    # Calcular RESULT_OU_* y CONFIDENCE_OU_* para partidos con predicción + línea + resultado
+    update_betting_results()
+
     logger.info("🏁 Proceso de actualización finalizado")
+
+
+def update_betting_results():
+    """
+    Calcula RESULT_OU_* y CONFIDENCE_OU_* para partidos que ahora tienen:
+    - Predicción del modelo (PREDICTION_OU_*)
+    - Línea de la casa (LINE_OU_*)
+    - Resultado real (PTS_HOME, PTS_AWAY)
+
+    Se ejecuta después de actualizar datos para evaluar automáticamente
+    los pronósticos de partidos ya jugados.
+    """
+    logger.info("=" * 50)
+    logger.info("Calculando resultados de betting...")
+
+    with NBADatabase() as db:
+        df = db.get_final_games()
+
+    # Necesitamos predicción + línea + resultado real
+    has_pred = df['PREDICTION_OU_TOTAL'].notna()
+    has_line = df['LINE_OU_TOTAL'].notna()
+    has_result = df['PTS_HOME'].notna() & (df['PTS_HOME'] > 0)
+
+    valid = has_pred & has_line & has_result
+
+    if valid.sum() == 0:
+        logger.info("No hay partidos con predicción + línea + resultado para evaluar")
+        return
+
+    logger.info(f"Evaluando {valid.sum()} partidos con datos completos...")
+
+    for target in ["TOTAL", "HOME", "AWAY"]:
+        line_col = f"LINE_OU_{target}"
+        pred_col = f"PREDICTION_OU_{target}"
+
+        if target == "TOTAL":
+            actual = df["PTS_HOME"] + df["PTS_AWAY"]
+        elif target == "HOME":
+            actual = df["PTS_HOME"]
+        else:
+            actual = df["PTS_AWAY"]
+
+        valid_target = valid & df[line_col].notna() & df[pred_col].notna()
+        if valid_target.sum() == 0:
+            continue
+
+        predicted_over = df.loc[valid_target, pred_col] > df.loc[valid_target, line_col]
+        actual_over = actual.loc[valid_target] > df.loc[valid_target, line_col]
+
+        df.loc[valid_target, f"RESULT_OU_{target}"] = np.where(
+            predicted_over == actual_over, "Hit", "Miss"
+        )
+
+        # Confianza basada en el margen |predicción - línea|
+        margin = (df.loc[valid_target, pred_col] - df.loc[valid_target, line_col]).abs()
+        k = 0.5
+        x0 = 5
+        df.loc[valid_target, f"CONFIDENCE_OU_{target}"] = 1 / (1 + np.exp(-k * (margin - x0)))
+
+    # Guardar cambios
+    with NBADatabase() as db:
+        db.insert_final_games(df, if_exists="replace")
+
+    # Resumen
+    for target in ["TOTAL", "HOME", "AWAY"]:
+        col = f"RESULT_OU_{target}"
+        hits = (df[col] == "Hit").sum()
+        total = df[col].notna().sum()
+        if total > 0:
+            logger.info(f"  OU_{target}: {hits}/{total} ({hits/total*100:.1f}% hits)")
 
 if __name__ == "__main__":
     main()

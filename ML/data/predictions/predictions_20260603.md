@@ -7,8 +7,8 @@
 - **Estadio**: Frost Bank Center, San Antonio
 
 #### 📊 Predicciones de Puntos
-- **New York Knicks**: 109 puntos  🟡 ALTA (77%)
-- **San Antonio Spurs**: 102 puntos  🟡 ALTA (75%)
+- **New York Knicks**: 108 puntos  🟡 ALTA (78%)
+- **San Antonio Spurs**: 101 puntos  🟡 ALTA (77%)
 #### 🏆 Resumen del Partido
 - **Ganador probable**: New York Knicks (por 7 puntos de diferencia)
 
