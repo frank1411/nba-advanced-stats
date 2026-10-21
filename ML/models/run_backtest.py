@@ -14,9 +14,12 @@ MODELS_DIR = Path(__file__).parent
 ROOT_DIR = MODELS_DIR.parent
 DATA_DIR = ROOT_DIR / "data" / "processed"
 
+from ML.db import NBADatabase
+
 # Cargar datos
-print("📂 Cargando datos...")
-df = pd.read_parquet(DATA_DIR / "nba_games_final.parquet")
+print("📂 Cargando datos desde SQLite...")
+with NBADatabase() as db:
+    df = db.get_final_games()
 
 # Filtrar solo temporada 2024 para pruebas
 test_season = 2024

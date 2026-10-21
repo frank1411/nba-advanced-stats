@@ -1,0 +1,718 @@
+{
+  "info": {
+    "_postman_id": "nba-odds-api-collection",
+    "name": "🏀 NBA - The Odds API",
+    "description": "Colección de endpoints de The Odds API para obtener líneas NBA.\n\nAPI Key configurada como variable de colección.\n\nEndpoints:\n- Sports disponibles\n- Odds NBA (H2H, Spreads, Totals)\n- Odds por evento específico\n- Scores/Resultados",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://api.the-odds-api.com/v4",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "TU_API_KEY",
+      "type": "string"
+    },
+    {
+      "key": "sport",
+      "value": "basketball_nba",
+      "type": "string"
+    },
+    {
+      "key": "event_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "📋 Configuración",
+      "item": [
+        {
+          "name": "Lista de Deportes Disponibles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports?apiKey={{api_key}}",
+              "host": ["{{base_url}}"],
+              "path": ["sports"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                }
+              ]
+            },
+            "description": "Obtiene la lista de todos los deportes disponibles en la API, incluyendo los que están actualmente en temporada."
+          }
+        },
+        {
+          "name": "Verificar Uso de API (Quota)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/odds?apiKey={{api_key}}&regions=us&markets=h2h",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "odds"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "regions",
+                  "value": "us"
+                },
+                {
+                  "key": "markets",
+                  "value": "h2h"
+                }
+              ]
+            },
+            "description": "Consulta mínima para verificar el uso de la API. Revisa los headers de respuesta:\n- x-requests-remaining: Solicitudes restantes\n- x-requests-used: Solicitudes usadas"
+          }
+        }
+      ]
+    },
+    {
+      "name": "🏀 NBA Odds",
+      "item": [
+        {
+          "name": "Odds NBA Completas (H2H + Spreads + Totals)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/odds?apiKey={{api_key}}&regions=us&markets=h2h,spreads,totals&oddsFormat=decimal&dateFormat=iso",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "odds"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "regions",
+                  "value": "us",
+                  "description": "Regiones: us, us2, uk, au, eu"
+                },
+                {
+                  "key": "markets",
+                  "value": "h2h,spreads,totals",
+                  "description": "Mercados: h2h (Moneyline), spreads (Handicap), totals (Over/Under)"
+                },
+                {
+                  "key": "oddsFormat",
+                  "value": "decimal",
+                  "description": "Formato: decimal, american"
+                },
+                {
+                  "key": "dateFormat",
+                  "value": "iso",
+                  "description": "Formato de fecha: iso, unix"
+                }
+              ]
+            },
+            "description": "⭐ ENDPOINT PRINCIPAL - Obtiene todas las odds NBA actuales.\n\nEste es el endpoint usado por 08_the_odds_api_recommendations.py para generar las recomendaciones diarias del Filtro 3.0.\n\nIncluye:\n- H2H (Moneyline): Quién gana\n- Spreads (Handicap): Ventaja/desventaja de puntos\n- Totals (Over/Under): Puntos totales del partido"
+          }
+        },
+        {
+          "name": "Odds NBA - Solo Spreads",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/odds?apiKey={{api_key}}&regions=us&markets=spreads&oddsFormat=decimal&dateFormat=iso",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "odds"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "regions",
+                  "value": "us"
+                },
+                {
+                  "key": "markets",
+                  "value": "spreads"
+                },
+                {
+                  "key": "oddsFormat",
+                  "value": "decimal"
+                },
+                {
+                  "key": "dateFormat",
+                  "value": "iso"
+                }
+              ]
+            },
+            "description": "Solo spreads (handicap). Útil para consultas que consumen menos quota."
+          }
+        },
+        {
+          "name": "Odds NBA - Solo Totals (Over/Under)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/odds?apiKey={{api_key}}&regions=us&markets=totals&oddsFormat=decimal&dateFormat=iso",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "odds"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "regions",
+                  "value": "us"
+                },
+                {
+                  "key": "markets",
+                  "value": "totals"
+                },
+                {
+                  "key": "oddsFormat",
+                  "value": "decimal"
+                },
+                {
+                  "key": "dateFormat",
+                  "value": "iso"
+                }
+              ]
+            },
+            "description": "Solo totals (Over/Under). Ideal para comparar con las predicciones del modelo."
+          }
+        },
+        {
+          "name": "Odds NBA - Solo Moneyline (H2H)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/odds?apiKey={{api_key}}&regions=us&markets=h2h&oddsFormat=american&dateFormat=iso",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "odds"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "regions",
+                  "value": "us"
+                },
+                {
+                  "key": "markets",
+                  "value": "h2h"
+                },
+                {
+                  "key": "oddsFormat",
+                  "value": "american",
+                  "description": "En formato americano (+150, -110)"
+                },
+                {
+                  "key": "dateFormat",
+                  "value": "iso"
+                }
+              ]
+            },
+            "description": "Solo moneyline en formato americano (+150, -110)."
+          }
+        },
+        {
+          "name": "Odds NBA - Múltiples Regiones",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/odds?apiKey={{api_key}}&regions=us,us2,eu&markets=h2h,spreads,totals&oddsFormat=decimal&dateFormat=iso",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "odds"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "regions",
+                  "value": "us,us2,eu",
+                  "description": "Múltiples regiones para más casas de apuestas"
+                },
+                {
+                  "key": "markets",
+                  "value": "h2h,spreads,totals"
+                },
+                {
+                  "key": "oddsFormat",
+                  "value": "decimal"
+                },
+                {
+                  "key": "dateFormat",
+                  "value": "iso"
+                }
+              ]
+            },
+            "description": "Odds de múltiples regiones (US, US2, EU) para comparar líneas entre casas."
+          }
+        },
+        {
+          "name": "Odds NBA - Con Bookmakers Específicos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/odds?apiKey={{api_key}}&regions=us&markets=h2h,spreads,totals&oddsFormat=decimal&dateFormat=iso&bookmakers=fanduel,draftkings,betmgm",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "odds"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "regions",
+                  "value": "us"
+                },
+                {
+                  "key": "markets",
+                  "value": "h2h,spreads,totals"
+                },
+                {
+                  "key": "oddsFormat",
+                  "value": "decimal"
+                },
+                {
+                  "key": "dateFormat",
+                  "value": "iso"
+                },
+                {
+                  "key": "bookmakers",
+                  "value": "fanduel,draftkings,betmgm",
+                  "description": "Filtrar por casas específicas"
+                }
+              ]
+            },
+            "description": "Filtra por casas de apuestas específicas: FanDuel, DraftKings y BetMGM (las que usa el script de recomendaciones)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Scores & Resultados",
+      "item": [
+        {
+          "name": "Scores NBA - Juegos Recientes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/scores?apiKey={{api_key}}&daysFrom=1&dateFormat=iso",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "scores"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "daysFrom",
+                  "value": "1",
+                  "description": "Días hacia atrás (1-3)"
+                },
+                {
+                  "key": "dateFormat",
+                  "value": "iso"
+                }
+              ]
+            },
+            "description": "Obtiene scores/resultados de juegos recientes. Útil para auditar las predicciones del día anterior."
+          }
+        },
+        {
+          "name": "Scores NBA - Últimos 3 Días",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/scores?apiKey={{api_key}}&daysFrom=3&dateFormat=iso",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "scores"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "daysFrom",
+                  "value": "3"
+                },
+                {
+                  "key": "dateFormat",
+                  "value": "iso"
+                }
+              ]
+            },
+            "description": "Scores de los últimos 3 días. Máximo permitido por la API."
+          }
+        }
+      ]
+    },
+    {
+      "name": "🎯 Player Props",
+      "item": [
+        {
+          "name": "Player Props NBA - Puntos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/odds?apiKey={{api_key}}&regions=us&markets=player_points&oddsFormat=decimal&dateFormat=iso",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "odds"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "regions",
+                  "value": "us"
+                },
+                {
+                  "key": "markets",
+                  "value": "player_points"
+                },
+                {
+                  "key": "oddsFormat",
+                  "value": "decimal"
+                },
+                {
+                  "key": "dateFormat",
+                  "value": "iso"
+                }
+              ]
+            },
+            "description": "Props de puntos individuales de jugadores."
+          }
+        },
+        {
+          "name": "Player Props NBA - Rebounds",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/odds?apiKey={{api_key}}&regions=us&markets=player_rebounds&oddsFormat=decimal&dateFormat=iso",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "odds"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "regions",
+                  "value": "us"
+                },
+                {
+                  "key": "markets",
+                  "value": "player_rebounds"
+                },
+                {
+                  "key": "oddsFormat",
+                  "value": "decimal"
+                },
+                {
+                  "key": "dateFormat",
+                  "value": "iso"
+                }
+              ]
+            },
+            "description": "Props de rebotes individuales de jugadores."
+          }
+        },
+        {
+          "name": "Player Props NBA - Assists",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/odds?apiKey={{api_key}}&regions=us&markets=player_assists&oddsFormat=decimal&dateFormat=iso",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "odds"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "regions",
+                  "value": "us"
+                },
+                {
+                  "key": "markets",
+                  "value": "player_assists"
+                },
+                {
+                  "key": "oddsFormat",
+                  "value": "decimal"
+                },
+                {
+                  "key": "dateFormat",
+                  "value": "iso"
+                }
+              ]
+            },
+            "description": "Props de asistencias individuales de jugadores."
+          }
+        },
+        {
+          "name": "Player Props NBA - PRA (Pts+Reb+Ast)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/odds?apiKey={{api_key}}&regions=us&markets=player_points_rebounds_assists&oddsFormat=decimal&dateFormat=iso",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "odds"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "regions",
+                  "value": "us"
+                },
+                {
+                  "key": "markets",
+                  "value": "player_points_rebounds_assists"
+                },
+                {
+                  "key": "oddsFormat",
+                  "value": "decimal"
+                },
+                {
+                  "key": "dateFormat",
+                  "value": "iso"
+                }
+              ]
+            },
+            "description": "Props combinados de Puntos + Rebotes + Asistencias."
+          }
+        }
+      ]
+    },
+    {
+      "name": "🧪 Pruebas & Otros Mercados",
+      "item": [
+        {
+          "name": "Mercados Alternativos (Alt Spreads & Totals)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/odds?apiKey={{api_key}}&regions=us&markets=alternate_spreads,alternate_totals&oddsFormat=decimal&dateFormat=iso",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "odds"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "regions",
+                  "value": "us"
+                },
+                {
+                  "key": "markets",
+                  "value": "alternate_spreads,alternate_totals",
+                  "description": "Líneas alternativas con diferentes hándicaps y totales"
+                },
+                {
+                  "key": "oddsFormat",
+                  "value": "decimal"
+                },
+                {
+                  "key": "dateFormat",
+                  "value": "iso"
+                }
+              ]
+            },
+            "description": "Obtiene líneas alternativas (Alternate Spreads y Alternate Totals). Útil para encontrar mejores cuotas con mayor o menor riesgo."
+          }
+        },
+        {
+          "name": "Player Props - Especialistas (3pt, Blk, Stl)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/odds?apiKey={{api_key}}&regions=us&markets=player_threes,player_blocks,player_steals&oddsFormat=decimal&dateFormat=iso",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "odds"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "regions",
+                  "value": "us"
+                },
+                {
+                  "key": "markets",
+                  "value": "player_threes,player_blocks,player_steals",
+                  "description": "Triples, Tapones y Robos"
+                },
+                {
+                  "key": "oddsFormat",
+                  "value": "decimal"
+                },
+                {
+                  "key": "dateFormat",
+                  "value": "iso"
+                }
+              ]
+            },
+            "description": "Props para especialistas: Triples convertidos, Tapones y Robos."
+          }
+        },
+        {
+          "name": "Mercados de 1ra Mitad (H1)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/odds?apiKey={{api_key}}&regions=us&markets=h2h_h1,spreads_h1,totals_h1&oddsFormat=decimal&dateFormat=iso",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "odds"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "regions",
+                  "value": "us"
+                },
+                {
+                  "key": "markets",
+                  "value": "h2h_h1,spreads_h1,totals_h1",
+                  "description": "Moneyline, Spread y Total de la primera mitad"
+                },
+                {
+                  "key": "oddsFormat",
+                  "value": "decimal"
+                },
+                {
+                  "key": "dateFormat",
+                  "value": "iso"
+                }
+              ]
+            },
+            "description": "Odds específicas para la primera mitad del partido (H1)."
+          }
+        },
+        {
+          "name": "Odds de Evento Específico (Requiere ID)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sports/{{sport}}/events/{{event_id}}/odds?apiKey={{api_key}}&regions=us&markets=h2h,spreads,totals&oddsFormat=decimal",
+              "host": ["{{base_url}}"],
+              "path": ["sports", "{{sport}}", "events", "{{event_id}}", "odds"],
+              "query": [
+                {
+                  "key": "apiKey",
+                  "value": "{{api_key}}"
+                },
+                {
+                  "key": "regions",
+                  "value": "us"
+                },
+                {
+                  "key": "markets",
+                  "value": "h2h,spreads,totals"
+                },
+                {
+                  "key": "oddsFormat",
+                  "value": "decimal"
+                }
+              ]
+            },
+            "description": "Obtiene todas las odds disponibles para un partido específico usando su ID de evento. Reemplaza {{event_id}} con un ID válido obtenido de los otros endpoints."
+          }
+        }
+      ]
+    },
+    {
+      "name": "🖥️ Servidor Local NBA",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5001/health",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5001",
+              "path": ["health"]
+            },
+            "description": "Verifica si el servidor local de la API de la NBA está funcionando."
+          }
+        },
+        {
+          "name": "Lista de Equipos Locales",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5001/api/teams",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5001",
+              "path": ["api", "teams"]
+            },
+            "description": "Obtiene la lista de equipos configurados en el servidor local."
+          }
+        },
+        {
+          "name": "Próximos Partidos (Local)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5001/api/upcoming-games?days_ahead=7&season=2025-26",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5001",
+              "path": ["api", "upcoming-games"],
+              "query": [
+                {
+                  "key": "days_ahead",
+                  "value": "7"
+                },
+                {
+                  "key": "season",
+                  "value": "2025-26"
+                }
+              ]
+            },
+            "description": "Obtiene los partidos programados para los próximos días usando el servidor local."
+          }
+        }
+      ]
+    }
+  ]
+}

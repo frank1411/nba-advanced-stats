@@ -1,5 +1,5 @@
 {
-  "fecha_creacion": "2026-05-30T12:19:40.179671",
+  "fecha_creacion": "2026-10-21T12:35:45.033750",
   "num_partidos": 10193,
   "temporadas": [
     2018,
@@ -9,16 +9,17 @@
     2022,
     2023,
     2024,
-    2025
+    2025,
+    2026
   ],
-  "equipos_locales": 35,
-  "equipos_visitantes": 35,
+  "equipos_locales": 30,
+  "equipos_visitantes": 30,
   "rango_fechas": {
     "inicio": "2018-10-16",
-    "fin": "2026-05-28"
+    "fin": "2026-10-20"
   },
   "columnas": {
-    "total": 95,
+    "total": 110,
     "categorias": {
       "identificadores": [
         "GAME_ID",
@@ -77,7 +78,17 @@
         "NET_RATING_HOME_TREND",
         "NET_RATING_AWAY_TREND",
         "PACE_HOME_TREND",
-        "PACE_AWAY_TREND"
+        "PACE_AWAY_TREND",
+        "LINE_OU_HOME",
+        "LINE_OU_AWAY",
+        "PREDICTION_OU_HOME",
+        "PREDICTION_OU_AWAY",
+        "RESULT_OU_HOME",
+        "RESULT_OU_AWAY",
+        "CONFIDENCE_OU_HOME",
+        "CONFIDENCE_OU_AWAY",
+        "RECOMMENDATION_OU_HOME",
+        "RECOMMENDATION_OU_AWAY"
       ],
       "diferenciales": [
         "HOME_POINT_DIFF",

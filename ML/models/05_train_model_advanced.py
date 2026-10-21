@@ -53,6 +53,12 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from xgboost import XGBRegressor
 
+# Asegurar imports relativos desde el paquete ML
+import sys
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from ML.db import NBADatabase
 
 # Configuración de rutas
@@ -184,6 +190,19 @@ def temporal_split(
 
     if holdout_season == "latest":
         current_season = int(df["SEASON"].max())
+        df_latest = df[(df["SEASON"] == current_season) & (df["SEASON_TYPE"] == "Regular Season")]
+        if len(df_latest) < 100:
+            # 'latest' puede apuntar a una temporada apenas iniciada (o con solo
+            # placeholders). Retrocede a la temporada anterior más robusta.
+            print(f"⚠️ Temporada {current_season} tiene solo {len(df_latest)} juegos de "
+                  f"Regular Season; usando la temporada anterior como holdout")
+            prev_seasons = sorted(df[(df["SEASON"] < current_season)]["SEASON"].unique(), reverse=True)
+            for s in prev_seasons:
+                s_count = len(df[(df["SEASON"] == s) & (df["SEASON_TYPE"] == "Regular Season")])
+                if s_count >= 100:
+                    current_season = int(s)
+                    print(f"📌 Holdout ajustado a {current_season} ({s_count} juegos)")
+                    break
     else:
         current_season = int(holdout_season)
 
@@ -320,6 +339,14 @@ def main():
     print("📂 Cargando datos...")
     df = load_data(args.input)
     print(f"✅ Datos cargados: {len(df)} partidos")
+
+    # Guardrail: excluir filas sin resultado (placeholders futuros creados por
+    # 08, o cualquier juego aún no jugado). Sin esto, NaN en los targets
+    # rompería el entrenamiento/split durante la temporada en curso.
+    n_before = len(df)
+    df = df.dropna(subset=["PTS_HOME", "PTS_AWAY"]).reset_index(drop=True)
+    if n_before != len(df):
+        print(f"⚠️ {n_before - len(df)} filas sin resultado (placeholders/futuras) excluidas")
     
     # Obtener columnas de features y targets
     feature_cols, target_cols = get_feature_columns(df)

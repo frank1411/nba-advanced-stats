@@ -32,17 +32,21 @@ def load_models() -> Tuple[object, object, List[str]]:
         print(f"❌ Error al cargar los modelos: {e}")
         sys.exit(1)
 
+# Asegurar imports relativos desde el paquete ML
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from ML.db import NBADatabase
+
 def load_data(season: int) -> pd.DataFrame:
-    """Carga y filtra los datos para la temporada especificada."""
+    """Carga y filtra los datos para la temporada especificada desde SQLite."""
     try:
-        input_path = PROCESSED_DATA_DIR / "nba_games_final.parquet"
-        df = pd.read_parquet(input_path)
-        
-        # Filtrar por temporada
-        season_df = df[df['SEASON'] == season].copy()
-        
-        print(f"📂 Datos cargados: {len(season_df)} partidos de la temporada {season}")
-        return season_df
+        with NBADatabase() as db:
+            df = db.get_games_by_season(season, table="final")
+
+        print(f"📂 Datos cargados desde SQLite: {len(df)} partidos de la temporada {season}")
+        return df
     except Exception as e:
         print(f"❌ Error al cargar los datos: {e}")
         sys.exit(1)

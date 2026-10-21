@@ -71,6 +71,10 @@ pd.set_option('display.max_colwidth', 50)
 
 # Configuración de rutas
 BASE_DIR = Path(__file__).parent.parent
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 MODELS_DIR = BASE_DIR / "models"
 DATA_DIR = BASE_DIR / "data"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
@@ -487,6 +491,11 @@ def generate_features(upcoming_games: pd.DataFrame) -> pd.DataFrame:
         if norm_abbr != team_abbr:
             print(f"🔄 Normalizando equipo: {team_abbr} -> {norm_abbr}")
         
+        # Temporada del juego pronosticado (misma convención que 02: la temporada
+        # NBA corre de octubre a junio; ej: pronóstico en nov 2026 → temporada 2026)
+        pred_season = game_date.year - 1 if game_date.month < 10 else game_date.year
+        pred_season_str = f"{pred_season}-{str(pred_season + 1)[-2:]}"
+        
         # Filtrar todos los partidos donde participó el equipo (como local o visitante)
         team_games = historical_data[
             (historical_data['TEAM_ABBREVIATION_HOME'] == norm_abbr) | 
@@ -526,17 +535,52 @@ def generate_features(upcoming_games: pd.DataFrame) -> pd.DataFrame:
         is_b2b = 1 if days_rest == 0 else 0
         
         # --- Cálculo de Viaje ---
-        if last_game['TEAM_ABBREVIATION_HOME'] == norm_abbr:
-            prev_loc_abbr = last_game['TEAM_ABBREVIATION_HOME']
-        else:
-            prev_loc_abbr = last_game['TEAM_ABBREVIATION_HOME'] # El local del partido anterior
+        # La ubicación del partido anterior siempre es el estadio del LOCAL de
+        # ese juego (sea el equipo el local o el visitante de ese partido).
+        prev_loc_abbr = last_game['TEAM_ABBREVIATION_HOME']
             
-        # --- Estadísticas de Rendimiento ---
-        role_games = historical_data[historical_data[f'TEAM_ABBREVIATION_{prefix}'] == norm_abbr].sort_values('GAME_DATE', ascending=False)
+        # --- Estadísticas de Rendimiento con cadena de fallback por temporada ---
+        #
+        # El modelo se entrenó con W_PCT/OFF_RATING/etc. *de temporada en curso*
+        # (cada fila histórica lleva las stats de SU temporada). Promediar las 8
+        # temporadas mezcladas diluye la señal actual. Cadena:
+        #   1) Temporada del pronóstico (solo partidos previos a la fecha)
+        #   2) La temporada más reciente con juegos en este rol
+        #   3) TODO el historial disponible como última opción
+        base_role = historical_data[
+            (historical_data[f'TEAM_ABBREVIATION_{prefix}'] == norm_abbr) &
+            (historical_data['GAME_DATE'] < game_date)
+        ]
+        
+        # Orden de preferencia: temporada del pronóstico primero, luego las
+        # temporadas previas de la más reciente a la más vieja
+        seasons_available = sorted(base_role['SEASON'].unique(), reverse=True)
+        order = ([] if pred_season in seasons_available else []) + seasons_available
+        if pred_season in seasons_available:
+            order = [pred_season] + [s for s in seasons_available if s != pred_season]
+        
+        pool_label = 'TODO el historial'
+        role_games = pd.DataFrame()
+        for season_int in order:
+            pool = base_role[base_role['SEASON'] == season_int]
+            if len(pool) >= 5:
+                role_games = pool
+                pool_label = f"{season_int}-{str(season_int + 1)[-2:]}"
+                if season_int != pred_season:
+                    print(f"📥 {norm_abbr} ({prefix}): fallback a temporada {pool_label} ({len(pool)} juegos)")
+                elif len(pool) < 20:
+                    print(f"⚠️ {norm_abbr} ({prefix}): solo {len(pool)} juegos en temporada actual")
+                break
+        if role_games.empty:
+            role_games = base_role
+        else:
+            print(f"📊 {norm_abbr} ({prefix}): estadísticas desde pool={pool_label}")
+        role_games = role_games.sort_values('GAME_DATE', ascending=False)
         
         if role_games.empty:
             # Si no ha jugado en ese rol, usar todos sus partidos
             role_games = team_games_past
+            pool_label = 'partidos totales del equipo'
         
         for metric in metrics:
             col = f'{metric}_{prefix}'
@@ -660,9 +704,11 @@ def calculate_score_probability(predicted_score: float, historical_mae: float, o
     Returns:
         Probabilidad de acierto (0-1) con variación decimal más fina
     """
-    # Usar el hash del puntaje predicho como semilla para reproducibilidad
-    # pero con variación basada en múltiples factores
-    seed = hash(f"{predicted_score:.1f}{historical_mae:.1f}{opponent_score or 0:.1f}{is_home}")
+    # Semilla DETERMINISTA: hash() de Python varía entre procesos (str hash
+    # randomizado) y asignar PYTHONHASHSEED en runtime no lo desactiva.
+    # zlib.crc32 es estable entre corridas → misma puntuación = misma probabilidad.
+    import zlib
+    seed = zlib.crc32(f"{predicted_score:.1f}{historical_mae:.1f}{opponent_score or 0:.1f}{is_home}".encode())
     random.seed(seed)
     
     # 1. Probabilidad base basada en el MAE histórico (más variación)
@@ -1017,6 +1063,7 @@ def save_predictions_to_db(predictions: pd.DataFrame) -> int:
 
     updated = 0
     not_found = 0
+    updated_rows = []
 
     for _, game in predictions.iterrows():
         # Normalizar fecha
@@ -1051,12 +1098,15 @@ def save_predictions_to_db(predictions: pd.DataFrame) -> int:
         df.loc[idx, 'PREDICTION_OU_HOME'] = pred_home
         df.loc[idx, 'PREDICTION_OU_AWAY'] = pred_away
         df.loc[idx, 'PREDICTION_OU_TOTAL'] = pred_total
+        updated_rows.append(idx)
         updated += 1
 
-    # Guardar cambios en la BD
-    if updated > 0:
+    # Guardar solo las filas modificadas (upsert sobre PRIMARY KEY GAME_ID).
+    # Evita reescribir la tabla completa de ~10k filas por cada corrida.
+    if updated_rows:
+        df_changed = df.loc[updated_rows]
         with NBADatabase() as db:
-            db.insert_final_games(df, if_exists="replace")
+            db.bulk_upsert("nba_games_final", df_changed)
 
     logger.info(f"✅ Predicciones guardadas en BD: {updated} actualizados, {not_found} no encontrados")
     return updated

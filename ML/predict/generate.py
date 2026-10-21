@@ -452,13 +452,15 @@ def generate_predictions() -> pd.DataFrame:
         # Cargar modelos y metadatos
         models, metadata = load_models()
         
-        # Cargar datos históricos para generar características
-        historical_path = DATA_DIR / "processed" / "nba_games_final.parquet"
-        if not historical_path.exists():
-            raise FileNotFoundError(f"No se encontraron datos históricos en {historical_path}")
-        
-        logger.info(f"Cargando datos históricos desde {historical_path}...")
-        historical = pd.read_parquet(historical_path)
+        # Cargar datos históricos para generar características desde SQLite
+        import sys
+        _pr = Path(__file__).parents[2]
+        if str(_pr) not in sys.path:
+            sys.path.insert(0, str(_pr))
+        from ML.db import NBADatabase
+        logger.info("Cargando datos históricos desde SQLite...")
+        with NBADatabase() as db:
+            historical = db.get_final_games()
         
         # Asegurar que las columnas necesarias estén presentes
         required_columns = ['GAME_DATE', 'HOME_TEAM', 'AWAY_TEAM', 'PTS_HOME', 'PTS_AWAY', 'HOME_TEAM_WINS']

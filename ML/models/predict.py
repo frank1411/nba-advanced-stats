@@ -30,13 +30,16 @@ DATA_DIR = BASE_DIR / "data"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 
 
+from ML.db import NBADatabase
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Predicción de puntos en partidos de la NBA")
     parser.add_argument(
         "--input",
         type=str,
-        default=str(PROCESSED_DATA_DIR / "nba_games_final.parquet"),
-        help="Ruta al archivo de entrada (Parquet o CSV)",
+        default=None,
+        help="Ruta al archivo de entrada (Parquet, CSV o 'sqlite'). Si no se indica, usa SQLite.",
     )
     parser.add_argument(
         "--output",
@@ -53,23 +56,32 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_input(path: str) -> pd.DataFrame:
-    """Carga el archivo de entrada y asegura los tipos correctos."""
-    p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"No existe el archivo de entrada: {p}")
-    
-    # Cargar datos
-    if p.suffix.lower() in {".parquet"}:
-        df = pd.read_parquet(p)
-    elif p.suffix.lower() in {".csv"}:
-        df = pd.read_csv(p)
+def load_input(path: str = None) -> pd.DataFrame:
+    """Carga el archivo de entrada o SQLite y asegura los tipos correctos."""
+    if path is None or path == "sqlite":
+        print("Cargando datos desde SQLite...")
+        with NBADatabase() as db:
+            df = db.get_final_games()
     else:
-        raise ValueError("Formato no soportado. Use .parquet o .csv")
+        p = Path(path)
+        if not p.exists():
+            raise FileNotFoundError(f"No existe el archivo de entrada: {p}")
+
+        # Cargar datos
+        if p.suffix.lower() in {".parquet"}:
+            df = pd.read_parquet(p)
+        elif p.suffix.lower() in {".csv"}:
+            df = pd.read_csv(p)
+        elif p.suffix.lower() in {".db"} or p.name == "nba.db":
+            with NBADatabase(str(p)) as db:
+                df = db.get_final_games()
+        else:
+            raise ValueError("Formato no soportado. Use .parquet, .csv o .db")
     
     # Asegurar tipos de columnas clave
+    if "GAME_DATE" in df.columns:
         df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"], errors="coerce")
-    
+
     return df
 
 

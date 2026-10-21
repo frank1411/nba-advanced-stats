@@ -82,7 +82,10 @@ Thumbs.db
 *.parquet
 !ML/data/processed/nba_games_final.parquet
 *.db
+!ML/data/nba.db
 *.sqlite3
+.agent/
+.claude/
 
 # Archivos temporales
 *.log
@@ -92,3 +95,4 @@ Thumbs.db
 # Archivos del sistema operativo
 .DS_Store
 Thumbs.db
+cookies.txt

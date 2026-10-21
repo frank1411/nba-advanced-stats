@@ -137,14 +137,16 @@ def main():
         print("❌ No se generó dataset histórico")
         sys.exit(1)
 
-    # Guardar Parquet en raw/
-    out_parquet = RAW_DATA_DIR / args.output
-    try:
-        df_hist.to_parquet(out_parquet, index=False)
-        print(f"✅ Dataset histórico guardado en {out_parquet}")
-    except Exception as e:
-        print(f"❌ Error guardando Parquet: {e}")
-        sys.exit(1)
+    # Guardar en SQLite (y Parquet como backup)
+    import sys
+    _pr = Path(__file__).parent.parent.parent
+    if str(_pr) not in sys.path:
+        sys.path.insert(0, str(_pr))
+    from ML.db import NBADatabase
+    with NBADatabase() as db:
+        db.create_tables()
+        db.insert_raw_games(df_hist, if_exists="append")
+    print(f"✅ Dataset histórico guardado en SQLite: {db.db_path}")
 
     # Opcional: generar dataset final con features diferenciales
     if args.also_generate_final:

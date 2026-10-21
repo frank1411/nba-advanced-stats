@@ -36,28 +36,24 @@ from sklearn.model_selection import train_test_split
 # Configuración de logging
 logger = logging.getLogger(__name__)
 
-# Configuración de rutas
-BASE_DIR = Path(__file__).parents[1]  # Subimos un nivel menos
-MODELS_DIR = BASE_DIR / "models"
-DATA_DIR = BASE_DIR / "data"  # Ahora apunta a ML/data
-PROCESSED_DATA_DIR = DATA_DIR / "processed"
+# Asegurar imports relativos desde el paquete ML
+import sys
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-# Asegurar que los directorios existan
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
+from ML.db import NBADatabase
 
 def load_data() -> pd.DataFrame:
     """
-    Cargar datos para entrenamiento.
-    
+    Cargar datos para entrenamiento desde SQLite.
+
     Returns:
         pd.DataFrame con los datos de entrenamiento
     """
-    data_path = PROCESSED_DATA_DIR / "nba_games_final.parquet"
-    if not data_path.exists():
-        raise FileNotFoundError(f"No se encontró el archivo de datos: {data_path}")
-    
-    logger.info(f"Cargando datos desde {data_path}")
-    return pd.read_parquet(data_path)
+    with NBADatabase() as db:
+        logger.info("Cargando datos desde SQLite...")
+        return db.get_final_games()
 
 def prepare_features(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, List[str]]]:
     """

@@ -25,11 +25,17 @@ RAW_DATA_DIR = DATA_DIR / "raw"
 PREDICTIONS_DIR = DATA_DIR / "predictions"
 REPORTS_DIR = BASE_DIR / "reports"
 
+# Asegurar imports relativos desde el paquete ML
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from ML.db import NBADatabase
+
 # Archivos clave a verificar
 KEY_FILES = {
     "model_home": MODELS_DIR / "model_PTS_HOME.pkl",
     "model_away": MODELS_DIR / "model_PTS_AWAY.pkl",
-    "data_processed": PROCESSED_DATA_DIR / "nba_games_final.parquet",
     "feature_list": MODELS_DIR / "feature_list.json",
     "metrics": MODELS_DIR / "metrics.json"
 }
@@ -139,8 +145,12 @@ def validate_data() -> Dict:
     """Valida los datos de entrada."""
     results = {}
     try:
-        # Cargar datos procesados
-        df = pd.read_parquet(KEY_FILES["data_processed"])
+        # Cargar datos procesados desde SQLite
+        with NBADatabase() as db:
+            df = db.get_final_games()
+
+        # Verificar que hay datos
+        results["data_exists"] = db.get_game_count("final") > 0
         
         # Estadísticas básicas
         results["data_stats"] = {

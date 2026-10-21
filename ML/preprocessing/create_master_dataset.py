@@ -4,6 +4,13 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import pytz
 from tqdm import tqdm
+# Asegurar imports relativos desde el paquete ML
+import sys
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from ML.db import NBADatabase
 
 # Configuración
 BASE_DIR = Path(__file__).parent.parent
@@ -114,23 +121,23 @@ class MasterDatasetCreator:
         return master_df
 
 def main():
-    # Cargar datos procesados
-    processed_data_path = PROCESSED_DATA_DIR / 'nba_advanced_stats.parquet'
-    if not processed_data_path.exists():
-        print("Error: No se encontraron datos procesados. Ejecuta primero calculate_advanced_stats.py")
+    # Cargar datos procesados desde SQLite
+    print("Cargando datos avanzados desde SQLite...")
+    with NBADatabase() as db:
+        df = db.query("SELECT * FROM nba_advanced_stats")
+
+    if df.empty:
+        print("Error: No se encontraron datos avanzados. Ejecuta primero calculate_advanced_stats.py")
         return
-    
-    print(f"Cargando datos procesados desde {processed_data_path}...")
-    df = pd.read_parquet(processed_data_path)
-    
+
     # Crear dataset maestro
     creator = MasterDatasetCreator(df)
     master_df = creator.create_dataset()
-    
-    # Guardar dataset final
-    output_path = PROCESSED_DATA_DIR / 'nba_master_dataset.parquet'
-    master_df.to_parquet(output_path, index=False)
-    print(f"Dataset maestro guardado en {output_path}")
+
+    # Guardar dataset final en SQLite
+    with NBADatabase() as db:
+        master_df.to_sql("nba_master_dataset", db._conn, if_exists="replace", index=False)
+    print("Dataset maestro guardado en SQLite")
     
     # Mostrar resumen
     print("\nResumen del dataset:")

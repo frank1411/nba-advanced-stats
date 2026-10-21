@@ -8,9 +8,18 @@ import seaborn as sns
 plt.style.use('ggplot')
 sns.set_theme(style="whitegrid")
 
-# Cargar los datos
-data_path = Path("ML/data/raw/nba_games_raw.parquet")
-df = pd.read_parquet(data_path)
+# Asegurar imports relativos desde el paquete ML
+import sys
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from ML.db import NBADatabase
+
+# Cargar los datos desde SQLite
+print("📂 Cargando datos desde SQLite...")
+with NBADatabase() as db:
+    df = db.get_raw_games()
 
 # Función para mostrar información detallada del DataFrame
 def analyze_data(df):

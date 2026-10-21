@@ -7,6 +7,12 @@ from typing import Optional, List, Dict
 import os
 from pathlib import Path
 import logging
+# Asegurar imports relativos desde el paquete ML
+import sys
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from ML.db import NBADatabase
 
 # Configurar logging
@@ -96,9 +102,14 @@ class NBAFinalProcessor:
             'DAYS_REST', 'IS_B2B', 'TRAVEL_DISTANCE'
         ]
         
-        # Función para calcular diferencias porcentuales
+        # Función para calcular diferencias porcentuales.
+        # - Denominador con valor absoluto: sumas negativas (ej. NET_RATING con
+        #   signos opuestos) invertían el signo del resultado.
+        # - Clip ±10: con HOME≈AWAY≈0 el cociente explotaba a ±1e12. Los valores
+        #   legítimos viven en [-2, 2], así que el clip no altera datos reales.
         def pct_diff(home, away):
-            return (home - away) / ((home + away) / 2 + 1e-10)  # Evitar división por cero
+            ratio = (home - away) / (np.abs((home + away) / 2) + 1e-10)
+            return ratio.clip(-10, 10)
         
         # Calcular diferencias para características básicas
         for feat in basic_features:
@@ -208,9 +219,9 @@ class NBAFinalProcessor:
         """
         Guarda el dataset final en SQLite (y opcionalmente CSV para inspección).
 
-        Preserva registros de juegos futuros (placeholders con líneas y pronósticos)
-        que no están en los datos raw procesados, y mantiene todas las columnas
-        de la BD (LINE_OU_*, PREDICTION_OU_*, etc.).
+        Preserva los datos de betting (LINE_OU_*, PREDICTION_OU_*, RECOMMENDATION_OU_*,
+        RESULT_OU_*, CONFIDENCE_OU_*) de juegos históricos ya cargados en la BD,
+        así como los placeholders del día actual.
 
         Args:
             filename: Nombre del archivo CSV de salida (la DB siempre se usa).
@@ -221,36 +232,75 @@ class NBAFinalProcessor:
         if self.df is None:
             raise ValueError("No hay datos para guardar. Ejecuta load_data() y calculate_differential_features() primero.")
 
-        # Preservar juegos futuros y columnas extra de la BD
+        # Columnas de betting que pueden existir en la BD pero no en el procesamiento
+        betting_cols = [
+            'LINE_OU_TOTAL', 'LINE_OU_HOME', 'LINE_OU_AWAY',
+            'PREDICTION_OU_TOTAL', 'PREDICTION_OU_HOME', 'PREDICTION_OU_AWAY',
+            'RECOMMENDATION_OU_TOTAL', 'RECOMMENDATION_OU_HOME', 'RECOMMENDATION_OU_AWAY',
+            'RESULT_OU_TOTAL', 'RESULT_OU_HOME', 'RESULT_OU_AWAY',
+            'CONFIDENCE_OU_TOTAL', 'CONFIDENCE_OU_HOME', 'CONFIDENCE_OU_AWAY',
+        ]
+
+        # Preservar datos de betting históricos y placeholders del día actual
         try:
             with NBADatabase() as db:
                 existing_final = db.get_final_games()
 
-            if 'GAME_DATE' in existing_final.columns and 'GAME_DATE' in self.df.columns:
+            if 'GAME_DATE' in existing_final.columns and 'GAME_DATE' in self.df.columns and 'GAME_ID' in self.df.columns:
                 existing_final['GAME_DATE'] = pd.to_datetime(existing_final['GAME_DATE'])
 
-                # 1. Asegurar que self.df tenga TODAS las columnas de la BD (LINE_OU, PREDICTION_OU, etc.)
+                # 1. Asegurar que self.df tenga TODAS las columnas de la BD
                 for col in existing_final.columns:
                     if col not in self.df.columns:
                         self.df[col] = None
 
-                # 2. Preservar placeholders del día actual (creados por 08_the_odds_api_recommendations.py)
+                # 2. Merge de columnas de betting de la BD hacia self.df por GAME_ID
+                #    Solo para juegos que ya existen (match por GAME_ID)
+                existing_with_betting = existing_final[
+                    existing_final[betting_cols].notna().any(axis=1)
+                ][['GAME_ID'] + [c for c in betting_cols if c in existing_final.columns]].copy()
+
+                if not existing_with_betting.empty and 'GAME_ID' in self.df.columns:
+                    # Solo mergear donde self.df no tiene datos de betting
+                    betting_cols_in_df = [c for c in betting_cols if c in self.df.columns]
+                    no_betting_mask = self.df[betting_cols_in_df].isna().all(axis=1)
+
+                    if no_betting_mask.any():
+                        merge_cols = [c for c in betting_cols if c in existing_with_betting.columns]
+                        if merge_cols:
+                            self.df = self.df.merge(
+                                existing_with_betting,
+                                on='GAME_ID',
+                                how='left',
+                                suffixes=('', '_existing')
+                            )
+                            # Llenar columnas de betting desde _existing donde estaban null
+                            for c in merge_cols:
+                                existing_col = f'{c}_existing'
+                                if existing_col in self.df.columns:
+                                    # Rellenaricios via máscara (evita FutureWarning
+                                    # de downcasting del fillna en columnas object)
+                                    fill_mask = self.df[c].isna()
+                                    self.df.loc[fill_mask, c] = self.df.loc[fill_mask, existing_col]
+                                    self.df = self.df.drop(columns=[existing_col])
+
+                            logger.info(f"Preservadas columnas de betting para juegos existentes")
+
+                # 3. Preservar placeholders del día actual (juegos de hoy aún no jugados)
                 today_str = pd.Timestamp.now().strftime('%Y-%m-%d')
-                future_mask = existing_final['GAME_DATE'] == pd.to_datetime(today_str)
-                # Excluir juegos ya procesados (que tienen PTS_HOME con resultado)
-                already_processed = self.df['GAME_DATE'] == pd.to_datetime(today_str)
-                today_in_final = existing_final[future_mask].copy()
-                if not today_in_final.empty:
-                    logger.info(f"Preservando {len(today_in_final)} juegos de hoy ({today_str}) con líneas/pronósticos")
-                    # Asegurar columnas consistentes
+                today_mask = existing_final['GAME_DATE'] == pd.to_datetime(today_str)
+                not_in_processed = ~existing_final['GAME_ID'].isin(self.df['GAME_ID'])
+                today_placeholders = existing_final[today_mask & not_in_processed].copy()
+
+                if not today_placeholders.empty:
+                    logger.info(f"Preservando {len(today_placeholders)} juegos de hoy ({today_str})")
                     for col in self.df.columns:
-                        if col not in today_in_final.columns:
-                            today_in_final[col] = None
-                    today_in_final = today_in_final[self.df.columns]
-                    # Combinar datos procesados + juegos de hoy
-                    self.df = pd.concat([self.df, today_in_final], ignore_index=True)
+                        if col not in today_placeholders.columns:
+                            today_placeholders[col] = None
+                    today_placeholders = today_placeholders[self.df.columns]
+                    self.df = pd.concat([self.df, today_placeholders], ignore_index=True)
         except Exception as e:
-            logger.warning(f"No se pudieron preservar juegos futuros: {e}")
+            logger.warning(f"No se pudieron preservar datos de betting: {e}")
 
         # Guardar en SQLite
         with NBADatabase() as db:
@@ -289,30 +339,41 @@ class NBAFinalProcessor:
         if missing_columns:
             raise ValueError(f"Faltan columnas requeridas: {missing_columns}")
         
-        # Calcular características diferenciales
-        logger.info("Calculando características diferenciales...")
+        # Calcular características diferenciales y añadir objetivo
+        # (los métodos ya loguean sus propios mensajes)
         self.calculate_differential_features()
-        
-        # Añadir variable objetivo
-        logger.info("Añadiendo variable objetivo...")
         self.add_target_variable()
         
-        # Verificar valores nulos
-        null_columns = self.df.columns[self.df.isnull().any()].tolist()
+        # Verificar valores nulos — imputar SOLO features.
+        # No se imputan identificadores ni resultado/objetivo (PTS, WL, TARGET,
+        # POINT_DIFF_TARGET): son datos hechos, no features del modelo.
+        no_impute = {
+            'GAME_ID', 'GAME_DATE', 'SEASON', 'SEASON_STR', 'SEASON_TYPE',
+            'TEAM_ABBREVIATION_HOME', 'TEAM_ABBREVIATION_AWAY', 'WL_HOME', 'WL_AWAY',
+            'PTS_HOME', 'PTS_AWAY', 'TARGET', 'POINT_DIFF_TARGET',
+        }
+        null_columns = [
+            c for c in self.df.columns
+            if self.df[c].isnull().any() and c not in no_impute
+        ]
         if null_columns:
             logger.warning(f"Se encontraron valores nulos en las columnas: {null_columns}")
             # Rellenar numéricos con la media y categóricos con la moda
             for col in self.df.select_dtypes(include=['number']).columns:
-                if self.df[col].isnull().any():
-                    mean_val = self.df[col].mean()
-                    self.df[col] = self.df[col].fillna(mean_val)
-                    logger.info(f"Rellenados {self.df[col].isnull().sum()} valores nulos en {col} con la media: {mean_val:.2f}")
-            
+                if col in no_impute or not self.df[col].isnull().any():
+                    continue
+                null_count = self.df[col].isnull().sum()
+                mean_val = self.df[col].mean()
+                self.df[col] = self.df[col].fillna(mean_val)
+                logger.info(f"Rellenados {null_count} valores nulos en {col} con la media: {mean_val:.2f}")
+
             for col in self.df.select_dtypes(include=['object', 'category']).columns:
-                if self.df[col].isnull().any():
-                    mode_val = self.df[col].mode()[0]
-                    self.df[col] = self.df[col].fillna(mode_val)
-                    logger.info(f"Rellenados {self.df[col].isnull().sum()} valores nulos en {col} con la moda: {mode_val}")
+                if col in no_impute or not self.df[col].isnull().any():
+                    continue
+                null_count = self.df[col].isnull().sum()
+                mode_val = self.df[col].mode()[0]
+                self.df[col] = self.df[col].fillna(mode_val)
+                logger.info(f"Rellenados {null_count} valores nulos en {col} con la moda: {mode_val}")
         
         # Guardar dataset final
         logger.info("Guardando dataset final...")
@@ -377,9 +438,8 @@ def main():
         # Cargar datos desde SQLite
         processor.load_data()
 
-        # Calcular características diferenciales
-        df_final = processor.calculate_differential_features()
-
+        # Calcular características diferenciales (generate_final_dataset
+        # ya las ejecuta internamente; no duplicar el trabajo)
         # Generar dataset final (guarda en SQLite + CSV para inspección)
         output_path = processor.generate_final_dataset()
 

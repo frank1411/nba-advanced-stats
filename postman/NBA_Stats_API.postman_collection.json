@@ -1,0 +1,296 @@
+{
+	"info": {
+		"_postman_id": "nba-stats-api-v2",
+		"name": "🏀 NBA Stats API",
+		"description": "Colección corregida para obtener estadísticas oficiales de la NBA (stats.nba.com).\n\nIncluye correcciones de headers para evitar bloqueos y nuevos requests de prueba.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "https://stats.nba.com/stats",
+			"type": "string"
+		},
+		{
+			"key": "season",
+			"value": "2024-25",
+			"type": "string"
+		},
+		{
+			"key": "league_id",
+			"value": "00",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "📊 Estadísticas de Equipo",
+			"item": [
+				{
+					"name": "League Dash Team Stats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Host", "value": "stats.nba.com" },
+							{ "key": "User-Agent", "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36" },
+							{ "key": "Accept", "value": "application/json, text/plain, */*" },
+							{ "key": "Accept-Language", "value": "en-US,en;q=0.9,es;q=0.8" },
+							{ "key": "x-nba-stats-origin", "value": "stats" },
+							{ "key": "x-nba-stats-token", "value": "true" },
+							{ "key": "Origin", "value": "https://www.nba.com" },
+							{ "key": "Referer", "value": "https://www.nba.com/" },
+							{ "key": "Connection", "value": "keep-alive" },
+							{ "key": "Cache-Control", "value": "max-age=0" }
+						],
+						"url": {
+							"raw": "{{base_url}}/leaguedashteamstats?LeagueID={{league_id}}&Season={{season}}&SeasonType=Regular Season&MeasureType=Advanced&PerMode=Per100Possessions&PlusMinus=N&PaceAdjust=Y&Rank=N&Outcome=&Location=&Month=0&SeasonSegment=&DateFrom=&DateTo=&OpponentTeamID=0&VsConference=&VsDivision=&GameSegment=&Period=0&LastNGames=0&GameScope=&PlayerExperience=&PlayerPosition=&StarterBench=&TwoWay=0&DraftYear=&DraftPick=&College=&Country=&Height=&Weight=",
+							"host": ["{{base_url}}"],
+							"path": ["leaguedashteamstats"],
+							"query": [
+								{ "key": "LeagueID", "value": "{{league_id}}" },
+								{ "key": "Season", "value": "{{season}}" },
+								{ "key": "SeasonType", "value": "Regular Season" },
+								{ "key": "MeasureType", "value": "Advanced" },
+								{ "key": "PerMode", "value": "Per100Possessions" },
+								{ "key": "PlusMinus", "value": "N" },
+								{ "key": "PaceAdjust", "value": "Y" },
+								{ "key": "Rank", "value": "N" },
+								{ "key": "Outcome", "value": "" },
+								{ "key": "Location", "value": "" },
+								{ "key": "Month", "value": "0" },
+								{ "key": "SeasonSegment", "value": "" },
+								{ "key": "DateFrom", "value": "" },
+								{ "key": "DateTo", "value": "" },
+								{ "key": "OpponentTeamID", "value": "0" },
+								{ "key": "VsConference", "value": "" },
+								{ "key": "VsDivision", "value": "" },
+								{ "key": "GameSegment", "value": "" },
+								{ "key": "Period", "value": "0" },
+								{ "key": "LastNGames", "value": "0" },
+								{ "key": "GameScope", "value": "" },
+								{ "key": "PlayerExperience", "value": "" },
+								{ "key": "PlayerPosition", "value": "" },
+								{ "key": "StarterBench", "value": "" },
+								{ "key": "TwoWay", "value": "0" },
+								{ "key": "DraftYear", "value": "" },
+								{ "key": "DraftPick", "value": "" },
+								{ "key": "College", "value": "" },
+								{ "key": "Country", "value": "" },
+								{ "key": "Height", "value": "" },
+								{ "key": "Weight", "value": "" }
+							]
+						},
+						"description": "Obtiene estadísticas avanzadas de todos los equipos para la temporada actual. Corregido con los headers necesarios para evitar el error 403/bloqueo."
+					}
+				},
+				{
+					"name": "Team Game Log",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Host", "value": "stats.nba.com" },
+							{ "key": "User-Agent", "value": "Mozilla/5.0" },
+							{ "key": "Referer", "value": "https://www.nba.com/" }
+						],
+						"url": {
+							"raw": "{{base_url}}/teamgamelog?LeagueID={{league_id}}&Season={{season}}&SeasonType=Regular Season&TeamID=1610612747",
+							"host": ["{{base_url}}"],
+							"path": ["teamgamelog"],
+							"query": [
+								{ "key": "LeagueID", "value": "{{league_id}}" },
+								{ "key": "Season", "value": "{{season}}" },
+								{ "key": "SeasonType", "value": "Regular Season" },
+								{ "key": "TeamID", "value": "1610612747", "description": "Lakers por defecto" }
+							]
+						},
+						"description": "Historial de juegos de un equipo específico."
+					}
+				}
+			]
+		},
+		{
+			"name": "📅 Calendario y Resultados",
+			"item": [
+				{
+					"name": "League Game Finder",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Host", "value": "stats.nba.com" },
+							{ "key": "User-Agent", "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36" },
+							{ "key": "Accept", "value": "application/json, text/plain, */*" },
+							{ "key": "x-nba-stats-origin", "value": "stats" },
+							{ "key": "x-nba-stats-token", "value": "true" },
+							{ "key": "Referer", "value": "https://www.nba.com/" }
+						],
+						"url": {
+							"raw": "{{base_url}}/leaguegamefinder?LeagueID={{league_id}}&PlayerOrTeam=T&Season={{season}}&SeasonType=Regular Season",
+							"host": ["{{base_url}}"],
+							"path": ["leaguegamefinder"],
+							"query": [
+								{ "key": "LeagueID", "value": "{{league_id}}" },
+								{ "key": "PlayerOrTeam", "value": "T" },
+								{ "key": "Season", "value": "{{season}}" },
+								{ "key": "SeasonType", "value": "Regular Season" }
+							]
+						},
+						"description": "Busca partidos basados en diferentes filtros. Útil para obtener IDs de juegos recientes."
+					}
+				}
+			]
+		},
+		{
+			"name": "👥 Jugadores y Rosters",
+			"item": [
+				{
+					"name": "Lista de Jugadores (Common All Players)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Host", "value": "stats.nba.com" },
+							{ "key": "User-Agent", "value": "Mozilla/5.0" },
+							{ "key": "Referer", "value": "https://www.nba.com/" }
+						],
+						"url": {
+							"raw": "{{base_url}}/commonallplayers?IsOnlyCurrentSeason=1&LeagueID={{league_id}}&Season={{season}}",
+							"host": ["{{base_url}}"],
+							"path": ["commonallplayers"],
+							"query": [
+								{ "key": "IsOnlyCurrentSeason", "value": "1" },
+								{ "key": "LeagueID", "value": "{{league_id}}" },
+								{ "key": "Season", "value": "{{season}}" }
+							]
+						},
+						"description": "Obtiene la lista de todos los jugadores activos en la temporada actual."
+					}
+				},
+				{
+					"name": "Player Game Log",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Host", "value": "stats.nba.com" },
+							{ "key": "User-Agent", "value": "Mozilla/5.0" },
+							{ "key": "Referer", "value": "https://www.nba.com/" }
+						],
+						"url": {
+							"raw": "{{base_url}}/playergamelog?LeagueID={{league_id}}&Season={{season}}&SeasonType=Regular Season&PlayerID=2544",
+							"host": ["{{base_url}}"],
+							"path": ["playergamelog"],
+							"query": [
+								{ "key": "LeagueID", "value": "{{league_id}}" },
+								{ "key": "Season", "value": "{{season}}" },
+								{ "key": "SeasonType", "value": "Regular Season" },
+								{ "key": "PlayerID", "value": "2544", "description": "LeBron James por defecto" }
+							]
+						},
+						"description": "Historial de juegos de un jugador específico."
+					}
+				},
+				{
+					"name": "Roster de Equipo (Common Team Roster)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Host", "value": "stats.nba.com" },
+							{ "key": "User-Agent", "value": "Mozilla/5.0" },
+							{ "key": "Referer", "value": "https://www.nba.com/" }
+						],
+						"url": {
+							"raw": "{{base_url}}/commonteamroster?LeagueID={{league_id}}&Season={{season}}&TeamID=1610612747",
+							"host": ["{{base_url}}"],
+							"path": ["commonteamroster"],
+							"query": [
+								{ "key": "LeagueID", "value": "{{league_id}}" },
+								{ "key": "Season", "value": "{{season}}" },
+								{ "key": "TeamID", "value": "1610612747", "description": "Ej: 1610612747 es Lakers" }
+							]
+						},
+						"description": "Obtiene la plantilla actual de un equipo específico."
+					}
+				}
+			]
+		},
+		{
+			"name": "🏀 Detalles de Juego",
+			"item": [
+				{
+					"name": "Box Score Traditional",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Host", "value": "stats.nba.com" },
+							{ "key": "User-Agent", "value": "Mozilla/5.0" },
+							{ "key": "Referer", "value": "https://www.nba.com/" }
+						],
+						"url": {
+							"raw": "{{base_url}}/boxscoretraditionalv2?EndPeriod=0&EndRange=0&GameID=0022400001&RangeType=0&StartPeriod=0&StartRange=0",
+							"host": ["{{base_url}}"],
+							"path": ["boxscoretraditionalv2"],
+							"query": [
+								{ "key": "EndPeriod", "value": "0" },
+								{ "key": "EndRange", "value": "0" },
+								{ "key": "GameID", "value": "0022400001", "description": "ID del juego" },
+								{ "key": "RangeType", "value": "0" },
+								{ "key": "StartPeriod", "value": "0" },
+								{ "key": "StartRange", "value": "0" }
+							]
+						},
+						"description": "Obtiene las estadísticas tradicionales de un partido específico."
+					}
+				}
+			]
+		},
+		{
+			"name": "🏗️ Información de Franquicia",
+			"item": [
+				{
+					"name": "League Standings",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Host", "value": "stats.nba.com" },
+							{ "key": "User-Agent", "value": "Mozilla/5.0" },
+							{ "key": "Referer", "value": "https://www.nba.com/" }
+						],
+						"url": {
+							"raw": "{{base_url}}/leaguestandingsv3?LeagueID={{league_id}}&Season={{season}}&SeasonType=Regular Season",
+							"host": ["{{base_url}}"],
+							"path": ["leaguestandingsv3"],
+							"query": [
+								{ "key": "LeagueID", "value": "{{league_id}}" },
+								{ "key": "Season", "value": "{{season}}" },
+								{ "key": "SeasonType", "value": "Regular Season" }
+							]
+						},
+						"description": "Clasificación actual de la liga."
+					}
+				},
+				{
+					"name": "Info Básica de Equipo (Team Info Common)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Host", "value": "stats.nba.com" },
+							{ "key": "User-Agent", "value": "Mozilla/5.0" },
+							{ "key": "Referer", "value": "https://www.nba.com/" }
+						],
+						"url": {
+							"raw": "{{base_url}}/teaminfocommon?LeagueID={{league_id}}&Season={{season}}&TeamID=1610612747&SeasonType=Regular Season",
+							"host": ["{{base_url}}"],
+							"path": ["teaminfocommon"],
+							"query": [
+								{ "key": "LeagueID", "value": "{{league_id}}" },
+								{ "key": "Season", "value": "{{season}}" },
+								{ "key": "TeamID", "value": "1610612747" },
+								{ "key": "SeasonType", "value": "Regular Season" }
+							]
+						},
+						"description": "Obtiene información básica, records y standings actuales de un equipo."
+					}
+				}
+			]
+		}
+	]
+}
+

@@ -59,26 +59,25 @@ NBA_STADIUMS = {
     'WAS': (38.8981, -77.0209)     # Capital One Arena
 }
 
-# Headers mejorados para la API de la NBA
+# Headers mejorados para la API de la NBA (Basados en sesión exitosa de Postman)
 HEADERS = {
     'Host': 'stats.nba.com',
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
     'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Language': 'en-US,en;q=0.9,es;q=0.8',
     'Accept-Encoding': 'gzip, deflate, br',
     'x-nba-stats-origin': 'stats',
     'x-nba-stats-token': 'true',
     'Origin': 'https://www.nba.com',
     'Connection': 'keep-alive',
     'Referer': 'https://www.nba.com/',
+    'Cookie': 'bm_s=YAAQSKvWFwwpx/edAQAALYedCAUo+C2tlUrFzJsf4XeD0zhpAx1JTMmO3ZaobnRwT9dFpQYrOV87N0FDXtK/wMLZ48we/r1bVxFRU7TtU/BcIDwz4KJ13GfjrBpcYZC/Jf4mYD0HITLdRwB5zqcTBa4nEj8nlx+gYI74VJdMMTeAfFf4QFtM8B/ybZUWpLjMlnKSAxHz3tCB55G+XGNctZ2iD/mYghUIt5y5WRnFk49W7ibYtk3CJzxG7U/78Qiiu7m9MZZ6HlV6ZGQDxVv5rFfnfyF6v/aF3DqB3qqzWVWMac8EnaDoGow/7lFGeRahdEyDCWbL2A/+T116kzQCULWmu9xrkOuxtSecOArOnyKY+wSgodfWcNtytjEu6dk6xP4zFEybspZSDoukYx9Yr887CNXod8CndkfK1L9ny/5QNWdXr5diMv6dbeHjmfM0nKEaZVZQ84b2AeESPe9iJahlAWuTOdNpojTVAa5etCu0RRa24TRrLM7T8zngFFrWDSAZ+Jhz9wUBUnCY02bMKds3baxIAd5PXje5dHZKZ5NJTDexnMS1tMdZEmc=;',
     'Sec-Fetch-Dest': 'empty',
     'Sec-Fetch-Mode': 'cors',
     'Sec-Fetch-Site': 'same-site',
-    'Pragma': 'no-cache',
-    'Cache-Control': 'no-cache',
-    'sec-ch-ua': '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
+    'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
     'sec-ch-ua-mobile': '?0',
-    'sec-ch-ua-platform': '"macOS"'
+    'sec-ch-ua-platform': '"Windows"'
 }
 
 # Ubicaciones de los estadios de la NBA (latitud, longitud)
@@ -150,14 +149,33 @@ class NBADataFetcher:
                 current_headers = HEADERS.copy()
                 current_headers['User-Agent'] = user_agents[attempt % len(user_agents)]
                 
+                # Eliminar Host para evitar detecciones de proxy
+                if 'Host' in current_headers:
+                    del current_headers['Host']
+
+                # Primera petición a la home para establecer sesión si es el primer intento
+                if attempt == 0:
+                    try:
+                        self.session.get("https://www.nba.com", timeout=5)
+                        time.sleep(1)
+                    except:
+                        pass
+
                 response = self.session.get(
                     url, 
                     params=params_with_ts,
                     headers=current_headers,
-                    timeout=self.timeout
+                    timeout=self.timeout,
+                    allow_redirects=True
                 )
-                response.raise_for_status()
                 
+                if response.status_code == 503:
+                    # Si recibimos 503, intentar resetear la sesión
+                    self.session = requests.Session()
+                    self.session.headers.update(HEADERS)
+                    raise requests.exceptions.RequestException("Servidor devolvió 503 (Posible bloqueo)")
+
+                response.raise_for_status()
                 data = response.json()
                 
                 # Verificar si la respuesta es válida
@@ -548,24 +566,30 @@ class NBADataFetcher:
             
             # Para cada estadística, calcular el promedio móvil
             for stat in stats_columns:
+                # Determinar los nombres de columna home/away para esta estadística
+                if stat in special_columns:
+                    home_col = special_columns[stat]['home']
+                    away_col = special_columns[stat]['away']
+                else:
+                    home_col = f'{stat}_HOME'
+                    away_col = f'{stat}_AWAY'
+                
+                # Si la estadística no existe en los datos (ej: temporada nueva aún
+                # sin estadísticas de equipos), no se puede calcular su promedio L10:
+                # omitir sin fallar el procesamiento
+                if home_col not in team_matches.columns or away_col not in team_matches.columns:
+                    print(f"⚠️ Estadística '{stat}' no disponible para esta temporada; se omite su cálculo L10")
+                    continue
+                
                 # Determinar si el equipo es local o visitante para cada partido
                 is_home = team_matches['TEAM_ID_HOME'] == team_id
                 
                 # Obtener los valores de la estadística para este equipo
-                if stat in special_columns:
-                    # Para columnas especiales como POINT_DIFF
-                    stat_values = np.where(
-                        is_home,
-                        team_matches[special_columns[stat]['home']],
-                        team_matches[special_columns[stat]['away']]
-                    )
-                else:
-                    # Para columnas estándar
-                    stat_values = np.where(
-                        is_home,
-                        team_matches[f'{stat}_HOME'],
-                        team_matches[f'{stat}_AWAY']
-                    )
+                stat_values = np.where(
+                    is_home,
+                    team_matches[home_col],
+                    team_matches[away_col]
+                )
                 
                 # Calcular el promedio móvil (últimos 10 partidos, excluyendo el actual)
                 rolling_mean = pd.Series(stat_values).shift(1).rolling(window=10, min_periods=1).mean()
@@ -871,22 +895,28 @@ def main():
     # Combinar todos los partidos
     if all_games:
         df = pd.concat(all_games, ignore_index=True)
-        
-        # Guardar los datos
-        output_dir = Path(__file__).parent.parent / "data" / "raw"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = output_dir / "nba_games_raw.parquet"
-        df.to_parquet(output_path, index=False)
-        
+
+        # Guardar los datos en SQLite
+        import sys
+        _pr = Path(__file__).parent.parent.parent
+        if str(_pr) not in sys.path:
+            sys.path.insert(0, str(_pr))
+        from ML.db import NBADatabase
+        with NBADatabase() as db:
+            db.create_tables()
+            db.insert_raw_games(df, if_exists="append")
+
+        output_path = db.db_path if 'db' in dir() else "ML/data/nba.db"
+
         # Mostrar resumen
-        print("\n✅ Datos guardados en:", output_path)
+        print("\n✅ Datos guardados en base de datos SQLite:", output_path)
         print("\n📊 Resumen de datos:")
         print(f"Total de partidos: {len(df):,}")
         print(f"Temporadas: {df['SEASON_STR'].nunique()}")
         print(f"Equipos únicos (local): {df['TEAM_ABBREVIATION_HOME'].nunique()}")
         print(f"Equipos únicos (visitante): {df['TEAM_ABBREVIATION_AWAY'].nunique()}")
         print(f"Rango de fechas: {df['GAME_DATE'].min().date()} a {df['GAME_DATE'].max().date()}")
-        
+
         # Mostrar columnas disponibles
         print("\n📋 Columnas disponibles:")
         print("\n".join([f"- {col}" for col in df.columns]))

@@ -369,12 +369,15 @@ class NBADatabase:
 
     def bulk_upsert(self, table: str, df: pd.DataFrame, key_column: str = "GAME_ID"):
         """
-        Inserta o reemplaza filas usando INSERT OR REPLACE.
+        Inserta o reemplaza filas usando INSERT OR REPLACE sobre la PRIMARY KEY.
+
+        Solo modifica las filas pasadas; el resto de la tabla no se toca,
+        por lo que es seguro ante interrupciones (a diferencia de replace completo).
 
         Args:
             table: Nombre de la tabla ('nba_games_raw' o 'nba_games_final').
-            df: DataFrame con los datos.
-            key_column: Columna primaria (default GAME_ID).
+            df: DataFrame con los datos. Debe incluir todas las columnas de la tabla.
+            key_column: Columna primaria (default GAME_ID). Debe ser PK en la tabla.
         """
         if df.empty:
             return 0
@@ -385,10 +388,17 @@ class NBADatabase:
                 "%Y-%m-%d"
             )
 
-        df_clean.to_sql(table, self._conn, if_exists="append", index=False,
-                        method="multi")
+        # Convertir NaN a None (NULL en SQLite)
+        df_clean = df_clean.astype(object).where(pd.notna(df_clean), None)
+
+        cols = list(df_clean.columns)
+        col_names = ", ".join(cols)
+        placeholders = ", ".join(["?"] * len(cols))
+        sql = f"INSERT OR REPLACE INTO {table} ({col_names}) VALUES ({placeholders})"
+
+        self._conn.executemany(sql, df_clean[cols].itertuples(index=False, name=None))
         count = len(df_clean)
-        logger.info(f"Insertados {count} registros en {table}")
+        logger.info(f"Upsertados {count} registros en {table} (INSERT OR REPLACE)")
         return count
 
     # ----------------------------------------------------------------

@@ -14,28 +14,20 @@ import time
 # Configuración de logging
 logger = logging.getLogger(__name__)
 
-# Configuración de rutas
-BASE_DIR = Path(__file__).parents[2]
-DATA_DIR = BASE_DIR / "data"
-RAW_DATA_DIR = DATA_DIR / "raw"
-PROCESSED_DATA_DIR = DATA_DIR / "processed"
-
-# Asegurar que los directorios existan
-for directory in [RAW_DATA_DIR, PROCESSED_DATA_DIR]:
-    directory.mkdir(parents=True, exist_ok=True)
+from ML.db import NBADatabase
 
 def load_historical_data() -> pd.DataFrame:
     """
-    Cargar datos históricos existentes o crear un DataFrame vacío.
-    
+    Cargar datos históricos existentes desde SQLite.
+
     Returns:
         pd.DataFrame: DataFrame con los datos históricos o vacío si no existen.
     """
-    historical_path = PROCESSED_DATA_DIR / "nba_games_final.parquet"
-    if historical_path.exists():
-        logger.info(f"Cargando datos históricos desde {historical_path}")
-        return pd.read_parquet(historical_path)
-    
+    with NBADatabase() as db:
+        if db.get_game_count("final") > 0:
+            logger.info("Cargando datos históricos desde SQLite")
+            return db.get_final_games()
+
     logger.info("No se encontraron datos históricos. Se creará un nuevo conjunto.")
     return pd.DataFrame()
 
@@ -181,14 +173,15 @@ def update_historical_data(start_season: int = 2016, end_season: int = 2025) -> 
     if 'GAME_ID' in updated.columns:
         updated = updated.drop_duplicates(subset=['GAME_ID'])
     
-    # Guardar datos actualizados
-    output_path = PROCESSED_DATA_DIR / "nba_games_final.parquet"
-    updated.to_parquet(output_path, index=False)
-    
+    # Guardar datos actualizados en SQLite
+    with NBADatabase() as db:
+        db.create_tables()
+        db.insert_final_games(updated, if_exists="replace")
+
     logger.info(f"✅ Datos históricos actualizados. Total de partidos: {len(updated)}")
     logger.info(f"   - Partidos históricos: {len(historical) if not historical.empty else 0}")
     logger.info(f"   - Nuevos partidos agregados: {len(new_games)}")
-    logger.info(f"   - Archivo guardado en: {output_path}")
+    logger.info(f"   - Guardado en SQLite")
 
 if __name__ == "__main__":
     # Configurar logging para ejecución directa

@@ -1,6 +1,53 @@
 # TODO: Mejoras del Modelo — Offseason 2026
 
 > Generado: 2026-06-03 tras la corrección crítica de data leakage (commit `e7e2f7f`)
+> Actualizado: 2026-10-20 (noche inaugural 2026-27) tras sesión de revisión completa del pipeline
+
+## Decisiones de la sesión 2026-10-20
+
+- Pipeline 02→03→05→06→08→09→10 revisado, corregido y validado (upserts, SEASON deducido,
+  tracking con SQLite fresco, guardrails de re-training en 05)
+- Models re-trained (holdout 2025): RF para PTS_HOME (MAE 10.10), XGB para PTS_AWAY (MAE 9.32);
+  backup previo en `ML/model_backups/20261020_135438/`
+- Umbrales del filtro 3.1 calibrados con líneas históricas (n=144, in-sample):
+  `THR_TOTAL=6.0`, `THR_AWAY=6.0` (verde, jugable), `THR_HOME=6.0` (**🔴 NO jugar**,
+  ninguna banda histórica supera 53%)
+- Hallazgo clave: picks Under históricamente 38-46% de acierto (sesgo a la baja del modelo,
+  −2.8 pts local / −1.0 visitante en holdout); Over 48-54%
+
+## Calendario de re-training acordado
+
+- [ ] **8 juegos por equipo** (~10% de temporada, mediados de noviembre 2026)
+- [ ] **Tras el Juego de Estrellas** (~febrero 2027; evaluar modo in-season, ver abajo)
+- [ ] **Cierre de temporada regular** (abril 2027, el flujo clásico con holdout completo)
+
+Nota: el `05` ya es seguro de correr cualquier día (guardrail NaN/placeholder + fallback
+de holdout si `latest` tiene <100 juegos RS). El re-train de noviembre con holdout 2025
+NO incluirá los partidos 2026-27 jugados (design actual: holdout excluye temporada actual).
+
+## 🔴 Prioridad Alta (agregado 2026-10-20)
+
+### 0. Puertaa direccional para picks Under + calibración de sesgo
+
+**Problema:** El modelo subestima totales (−2.8 local / −1.0 visitante vs real en holdout).
+Los picks Under rinden 38-46% y arrastran el accuracy global del O/U.
+
+**Qué hacer:**
+- [ ] Calibración de sesgo en `06` (post-procesado de predicciones: sumar offset estimado)
+- [ ] O alternativamente puerta direccional en `08`: Under solo si |Δ| ≥ 10
+- [ ] Re-calibrar umbrales de Filtro 3.1 cuando haya ≥400 juegos con línea
+
+**Impacto objetivo:** pasar del ~50% global a >53% sostenido (break-even con vig)
+
+### 0.1 Validar umbral de diferencia → victorias (idea del usuario, pendiente)
+
+Analizar con qué margen de diferencia predicha los equipos realmente ganan por ese margen
+o más (relación |pred_dif| vs resultado real POINT_DIFF). Complementa la calibración
+direccional: definir cuándo el pick "ganador" es rentable y no solo el O/U.
+
+**Qué hacer:**
+- [ ] Usar `POINT_DIFF_TARGET` histórico vs predicciones guardadas de 06/09
+- [ ] Tabla de margen predicho (5/10/15 pts) vs % de veces que el favorito cubrió
 
 ## Contexto
 
@@ -43,17 +90,34 @@ mismo), pero `LINE_OU_*` (líneas de apuestas) son datos externos válidos.
 
 ## 🟡 Prioridad Media
 
-### 3. Calcular columnas TREND correctamente
+### 3. Implementar snapshots diarios para columnas TREND
 
-**Problema:** 12 columnas `*_TREND` son todas ceros (std=0). Se generan en
-`03_process_final_dataset.py` pero el cálculo nunca se ejecuta en el pipeline actual.
+**Problema:** 12 columnas `*_TREND` son todas ceros. El API de la NBA devuelve
+OFF_RATING, DEF_RATING, NET_RATING y PACE como **promedio de toda la temporada**
+(un solo valor por equipo), que se asigna a los 82 juegos. No hay evolución temporal.
+
+**La idea original (correcta):** Cada día que corre 02, el API da un valor ligeramente
+distinto de PACE/OFF_RATING/etc. Si guardamos ese valor día a día, podemos calcular
+`TREND = promedio(últimos 10 snapshots) - snapshot_actual` para ver si un equipo
+mejora o empeora respecto a su nivel estacional.
 
 **Qué hacer:**
-- [ ] Corregir `calculate_differential_features()` en `03_process_final_dataset.py` para
-  calcular `L10 - season_avg` correctamente (actualmente compara `L10_HOME` contra `*_HOME`
-  que es por-partido, no promedio de temporada)
-- [ ] Alternativa: usar `L5 - L10` como tendencia (últimos 5 vs últimos 10)
-- [ ] Si las TREND dan señal, re-incluirlas en el modelo
+- [ ] Crear tabla `daily_team_snapshots` en la BD:
+  ```
+  snapshot_date | team_abbr | pace | off_rating | def_rating | net_rating
+  2025-11-15    | SAS       | 99.5 | 113.0      | 110.8      | 2.2
+  2025-11-20    | SAS       | 99.8 | 112.8      | 111.0      | 1.8
+  ```
+- [ ] Modificar `02_update_nba_data.py` para guardar un snapshot diario al llamar al API
+- [ ] Re-calcular las 12 columnas TREND usando esta tabla:
+  - `OFF_RATING_HOME_TREND = avg(últimos 10 snapshots de OFF_RATING_HOME) - snapshot_actual`
+  - Idem para DEF_RATING, NET_RATING, PACE (HOME y AWAY)
+  - `_TREND_DIFF = TREND_HOME - TREND_AWAY`
+- [ ] Si las TREND dan señal, re-incluirlas como features del modelo (actualmente excluidas)
+
+**Nota:** En temporadas anteriores los snapshots son un solo valor por temporada
+(carga masiva histórica). La señal de TREND solo será útil desde la temporada
+donde se implementen los snapshots diarios.
 
 ### 4. Corregir `POINT_DIFF_L10_PCT_DIFF`
 

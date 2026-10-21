@@ -25,13 +25,16 @@ MODELS_DIR = Path(__file__).parent
 ROOT_DIR = MODELS_DIR.parent.parent
 DATA_DIR = ROOT_DIR / "data" / "processed"
 
+from ML.db import NBADatabase
+
 # Añadir el directorio raíz al path para importaciones
 sys.path.append(str(ROOT_DIR))
 
-def load_data(input_path: str) -> pd.DataFrame:
-    """Carga los datos de partidos de la NBA."""
-    print(f"📂 Cargando datos desde {input_path}...")
-    df = pd.read_parquet(input_path)
+def load_data(input_path: str = None) -> pd.DataFrame:
+    """Carga los datos de partidos de la NBA desde SQLite."""
+    print("📂 Cargando datos desde SQLite...")
+    with NBADatabase() as db:
+        df = db.get_final_games()
     
     # Asegurarse de que las columnas necesarias existen
     required_cols = [
@@ -275,8 +278,8 @@ if __name__ == "__main__":
     from scipy.stats import norm
     
     parser = argparse.ArgumentParser(description='Backtesting del modelo de predicción de la NBA')
-    parser.add_argument('--input', type=str, default=str(DATA_DIR / 'nba_games_final.parquet'),
-                        help='Ruta al archivo de datos de entrada (parquet)')
+    parser.add_argument('--input', type=str, default=None,
+                        help='Ruta al archivo de datos de entrada (parquet/csv). Si no se indica, usa SQLite.')
     parser.add_argument('--test-season', type=str, default='latest',
                         help='Temporada a utilizar como conjunto de prueba (ej: 2024) o "latest"')
     
