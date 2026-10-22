@@ -379,7 +379,14 @@ class NBADataFetcher:
                     group.iloc[0, group.columns.get_loc('IS_HOME')] = 1
             return group
             
-        df_processed = df_processed.groupby('GAME_ID', group_keys=False).apply(mark_home_team)
+        # El groupby.apply excluye la columna de agrupación (pandas ≥3) y de
+        # lo contrario lanza FutureWarning; GAME_ID se restituye del snapshot
+        # original porque el merge posterior lo necesita como columna.
+        game_id_snapshot = df_processed['GAME_ID']
+        df_processed = df_processed.groupby('GAME_ID', group_keys=False).apply(
+            mark_home_team, include_groups=False
+        )
+        df_processed['GAME_ID'] = game_id_snapshot.loc[df_processed.index]
         
         # Separar en local y visitante
         home_games = df_processed[df_processed['IS_HOME'] == 1].copy()

@@ -65,6 +65,7 @@ def save_lines_to_db(lines_records: list) -> int:
     df_before = df.copy()  # snapshot para detectar solo filas modificadas al final
     updated = 0
     created = 0
+    new_rows = []  # placeholders: un solo concat al final (dtypes preservados)
 
     for rec in lines_records:
         date_str = rec['game_date']
@@ -113,7 +114,7 @@ def save_lines_to_db(lines_records: list) -> int:
                 new_row['PREDICTION_OU_AWAY'] = rec['pred_away']
                 new_row['PREDICTION_OU_TOTAL'] = rec['pred_total']
 
-            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            new_rows.append(new_row)
             created += 1
         else:
             idx = match_idx[0]
@@ -127,6 +128,13 @@ def save_lines_to_db(lines_records: list) -> int:
                 df.loc[idx, 'PREDICTION_OU_TOTAL'] = rec['pred_total']
 
             updated += 1
+
+    # Concatenar placeholders en una sola operación. Los chunks con columnas
+    # all-NA deprecaban el dtype resultante (FutureWarning) — se descartan las
+    # columnas vacías del chunk; al hacer el concat pandas las realinea a NaN.
+    if new_rows:
+        placeholder_df = pd.DataFrame(new_rows).dropna(axis=1, how='all')
+        df = pd.concat([df, placeholder_df], ignore_index=True)
 
     # Calcular RESULT_OU_* y CONFIDENCE_OU_* para partidos con línea + predicción + resultado real
     # Y RECOMMENDATION_OU_* para partidos con línea + predicción (sin resultado)
@@ -201,14 +209,16 @@ def save_lines_to_db(lines_records: list) -> int:
             print(f"   {res_col}: {hits}/{total_res} ({hits/total_res*100:.1f}% hits)")
 
     # Guardar solo las filas modificadas/creadas (upsert sobre PRIMARY KEY GAME_ID)
-    # Las filas creadas (placeholders) van al final: índices >= len(df_before)
+    # Selección POSICIONAL: tras el concat de placeholders el índice de df es un
+    # RangeIndex nuevo (len = df_before + creadas); comparar con las etiquetas
+    # de df_before rompe el ejercicio booleano de longitud distinta.
     try:
         n_before = len(df_before)
         existing_part = df.iloc[:n_before]
         eq_mask = existing_part.eq(df_before) | (existing_part.isna() & df_before.isna())
-        changed_existing = df.index[~eq_mask.all(axis=1)]
-        created_rows = df.index[n_before:]
-        rows_to_save = df.loc[changed_existing.union(created_rows)]
+        changed_pos = np.flatnonzero(~eq_mask.all(axis=1))
+        created_pos = np.arange(n_before, len(df))
+        rows_to_save = df.iloc[np.concatenate([changed_pos, created_pos])]
     except Exception as e:
         # Fallback conservador: guardar todo
         print(f"⚠️ Detección de cambios falló ({e}); se upsertea el dataset completo")
