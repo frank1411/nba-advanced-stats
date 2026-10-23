@@ -1,0 +1,110 @@
+
+    <!DOCTYPE html>
+    <html lang="es"><head><meta charset="UTF-8"><title>NBA Smart Picks 3.0</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; padding: 40px; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; }
+        header { background: #1e293b; color: white; padding: 25px; text-align: center; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #f8fafc; padding: 18px; text-align: left; color: #64748b; font-size: 0.85rem; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; }
+        td { padding: 20px; border-bottom: 1px solid #f1f5f9; font-size: 0.95rem; }
+        .team-cell { font-weight: 700; color: #0f172a; }
+        .tot-bold { font-weight: 700; color: #1e293b; }
+        tr:hover { background: #f8fafc; }
+        .no-data { padding: 40px; text-align: center; color: #94a3b8; font-style: italic; }
+    </style></head>
+    <body><div class="container"><header><h1>🏀 NBA Smart Picks 3.1</h1><p>Filtros Asimétricos (L: 6.0 / V: 6.0 / P: 6.0)</p></header>
+    <table><thead><tr><th>Partido (V @ L)</th><th>Modelo (V / L - Tot)</th><th>Casa (V / L - Tot)</th><th>Recomendaciones Verdes</th></tr></thead>
+    <tbody>
+                    <tr>
+                        <td class='team-cell'>Chicago Bulls @ Milwaukee Bucks</td>
+                        <td class='model-cell'>115 / 116 - <span class='tot-bold'>231</span></td>
+                        <td class='casa-cell'>120.0 / 118.5 - <span class='tot-bold'>238.5</span></td>
+                        <td style='color: #059669; font-weight: bold;'>💰 ML-L 62.7% · HA +1.0 cubre 62.7% / 🟢 UP  (-7.5)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td class='team-cell'>New York Knicks @ Boston Celtics</td>
+                        <td class='model-cell'>105 / 109 - <span class='tot-bold'>214</span></td>
+                        <td class='casa-cell'>110.5 / 113.0 - <span class='tot-bold'>223.5</span></td>
+                        <td style='color: #059669; font-weight: bold;'>💰 ML-L 60.0% · HA +4.0 cubre 56.7% / 🟢 UP  (-9.5)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td class='team-cell'>Atlanta Hawks @ Charlotte Hornets</td>
+                        <td class='model-cell'>119 / 121 - <span class='tot-bold'>240</span></td>
+                        <td class='casa-cell'>114.5 / 112.0 - <span class='tot-bold'>226.5</span></td>
+                        <td style='color: #059669; font-weight: bold;'>💰 ML-L 62.7% · HA +2.0 cubre 62.7% / 🔴 OL  (9.0) / 🟢 OP  (13.5)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td class='team-cell'>Dallas Mavericks @ Indiana Pacers</td>
+                        <td class='model-cell'>119 / 116 - <span class='tot-bold'>235</span></td>
+                        <td class='casa-cell'>116.0 / 122.5 - <span class='tot-bold'>238.5</span></td>
+                        <td style='color: #059669; font-weight: bold;'>💰 ML-V 60.0% · HA -3.0 cubre 56.7% / 🔴 UL ⭐ (-6.5)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td class='team-cell'>Minnesota Timberwolves @ Orlando Magic</td>
+                        <td class='model-cell'>121 / 122 - <span class='tot-bold'>243</span></td>
+                        <td class='casa-cell'>118.5 / 117.0 - <span class='tot-bold'>235.5</span></td>
+                        <td style='color: #059669; font-weight: bold;'>💰 ML-L 62.7% · HA +1.0 cubre 62.7% / 🟢 OP  (7.5)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td class='team-cell'>Toronto Raptors @ Washington Wizards</td>
+                        <td class='model-cell'>119 / 115 - <span class='tot-bold'>234</span></td>
+                        <td class='casa-cell'>122.0 / 113.5 - <span class='tot-bold'>235.5</span></td>
+                        <td style='color: #059669; font-weight: bold;'>💰 ML-V 60.0% · HA -4.0 cubre 56.7%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td class='team-cell'>Detroit Pistons @ Miami Heat</td>
+                        <td class='model-cell'>124 / 122 - <span class='tot-bold'>246</span></td>
+                        <td class='casa-cell'>118.5 / 117.0 - <span class='tot-bold'>235.5</span></td>
+                        <td style='color: #059669; font-weight: bold;'>💰 ML-V 62.7% · HA -2.0 cubre 62.7% / 🟢 OP  (10.5)</td>
+                    </tr>
+                    
+                    <tr>
+                        <td class='team-cell'>Houston Rockets @ San Antonio Spurs</td>
+                        <td class='model-cell'>113 / 115 - <span class='tot-bold'>228</span></td>
+                        <td class='casa-cell'>111.0 / 116.5 - <span class='tot-bold'>227.5</span></td>
+                        <td style='color: #059669; font-weight: bold;'>💰 ML-L 62.7% · HA +2.0 cubre 62.7%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td class='team-cell'>New Orleans Pelicans @ Utah Jazz</td>
+                        <td class='model-cell'>117 / 124 - <span class='tot-bold'>241</span></td>
+                        <td class='casa-cell'>118.5 / 121.0 - <span class='tot-bold'>239.5</span></td>
+                        <td style='color: #059669; font-weight: bold;'>💰 ML-L 86.2% · HA +7.0 cubre 67.2%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td class='team-cell'>Memphis Grizzlies @ Golden State Warriors</td>
+                        <td class='model-cell'>117 / 121 - <span class='tot-bold'>238</span></td>
+                        <td class='casa-cell'>116.0 / 119.5 - <span class='tot-bold'>235.5</span></td>
+                        <td style='color: #059669; font-weight: bold;'>💰 ML-L 60.0% · HA +4.0 cubre 56.7%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td class='team-cell'>LA Clippers @ Los Angeles Lakers</td>
+                        <td class='model-cell'>114 / 120 - <span class='tot-bold'>234</span></td>
+                        <td class='casa-cell'>109.5 / 119.0 - <span class='tot-bold'>228.5</span></td>
+                        <td style='color: #059669; font-weight: bold;'>💰 ML-L 86.2% · HA +6.0 cubre 67.2%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td class='team-cell'>Portland Trail Blazers @ Sacramento Kings</td>
+                        <td class='model-cell'>121 / 119 - <span class='tot-bold'>240</span></td>
+                        <td class='casa-cell'>120.5 / 112.0 - <span class='tot-bold'>232.5</span></td>
+                        <td style='color: #059669; font-weight: bold;'>💰 ML-V 62.7% · HA -2.0 cubre 62.7% / 🔴 OL  (7.0) / 🟢 OP  (7.5)</td>
+                    </tr>
+                    </tbody></table>
+    <div style='padding: 20px; background: #f8fafc; font-size: 0.85rem;'>
+        <b>Leyenda Filtro 3.1:</b> 🟢 Verde: Rentabilidad validada (acumular) | ⭐: Rango de Estabilidad Validado | Umbrales: L 6.0, V 6.0, P 6.0, ML 1.0<br>
+        <b>🔑 Abreviaturas:</b> ML-L / ML-V = Moneyline del favorito local/visitante | HA +x = ventaja del favorito (margen predicho) | OV/OL/OP = Over Visita/Local/Partido | UV/UL/UP = Under | ⭐ = estabilidad validada<br>
+        <b>💰 ML:</b> ganador predicho del favorito. El % tras ML-L/ML-V es el % histórico de acierto según su banda de margen; "cubre" es el % de veces que gana por esa ventaja — backtest 249 juegos test RS 2025-26. Sin líneas de la casa.<br>
+        <b>🔴 Rojo = NO JUGAR:</b> el mercado Local no superó 53% en ninguna banda del histórico de líneas (calibración abril-junio 2026, n=144). Pick mostrado solo para seguimiento.
+    </div>
+    </div></body></html>
+    

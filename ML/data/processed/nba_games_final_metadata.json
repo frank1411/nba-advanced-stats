@@ -1,6 +1,6 @@
 {
-  "fecha_creacion": "2026-10-22T11:02:06.378203",
-  "num_partidos": 10204,
+  "fecha_creacion": "2026-10-23T16:23:17.058286",
+  "num_partidos": 10218,
   "temporadas": [
     2018,
     2019,
@@ -16,7 +16,7 @@
   "equipos_visitantes": 30,
   "rango_fechas": {
     "inicio": "2018-10-16",
-    "fin": "2026-10-21"
+    "fin": "2026-10-23"
   },
   "columnas": {
     "total": 110,

@@ -68,7 +68,78 @@ class NBAFinalProcessor:
             logger.info(f"Cargando datos desde {self.input_path}")
             self.df = pd.read_parquet(self.input_path)
         logger.info(f"Datos cargados. Filas: {len(self.df)}, Columnas: {len(self.df.columns)}")
+        self._recompute_l10_columns()
         return self.df
+    
+    def _recompute_l10_columns(self) -> None:
+        """
+        Recalcula las columnas *_L10_* desde los resultados del raw completo,
+        replicando la fórmula exacta de 01_fetch (media móvil shift(1) de los
+        10 juegos previos del equipo, ventana dentro de SEASON+SEASON_TYPE).
+
+        Motivo: el fetch diario en temporada llega en lotes de 1-2 juegos →
+        el rolling del fetch solo ve esos juegos y deja la mayoría in-season
+        con L10 nulo, que luego 03 imputa con la media global en ~12 features.
+        Recalcular aquí garantiza features íntegras e idempotentes en cada
+        corrida, independientemente del tamaño del lote diario.
+
+        Solo filas con resultados reales (todas las de raw); las filas
+        placeholder de juegos futuros viven en nba_games_final y nunca
+        pasan por aquí, así que sus features de pools (06) no se tocan.
+        """
+        df = self.df
+        metrics = ['PTS', 'OFF_RATING', 'DEF_RATING', 'NET_RATING', 'PACE', 'POINT_DIFF']
+        # POINT_DIFF: convención especial de 01 (columnas ya del lado del equipo)
+        special_cols = {'POINT_DIFF': ('HOME_POINT_DIFF', 'AWAY_POINT_DIFF')}
+        l10_cols = [f'{m}_L10_{s}' for m in metrics if f'{m}_L10_HOME' in df.columns
+                    for s in ('HOME', 'AWAY')]
+        missing = [c for c in l10_cols if c not in df.columns]
+        if missing:
+            logger.warning(f"Columnas L10 ausentes en raw, no se recalculan: {missing}")
+            l10_cols = [c for c in l10_cols if c not in missing]
+        if not l10_cols:
+            return
+        
+        before_nulls = int(df[l10_cols].isna().sum().sum())
+        before_notnull = int(df[l10_cols].notna().sum().sum())
+        n_changed = 0
+        
+        # L10 por equipo dentro de cada (SEASON, SEASON_TYPE), igual que el
+        # fetch histórico por lotses (los primeros juegos de temporada quedan
+        # nulos legítimamente hasta min_periods)
+        for (season, s_type), grp in df.groupby(['SEASON', 'SEASON_TYPE']):
+            for team_id in grp['TEAM_ID_HOME'].dropna().unique():
+                is_h = grp['TEAM_ID_HOME'] == team_id
+                is_a = grp['TEAM_ID_AWAY'] == team_id
+                tm = grp[is_h | is_a].sort_values('GAME_DATE')
+                if tm.empty:
+                    continue
+                home_mask = (tm['TEAM_ID_HOME'] == team_id).values
+                for metric in metrics:
+                    h_col, a_col = special_cols.get(
+                        metric, (f'{metric}_HOME', f'{metric}_AWAY'))
+                    if h_col not in tm.columns or a_col not in tm.columns:
+                        continue
+                    values = np.where(home_mask, tm[h_col].values, tm[a_col].values)
+                    rolling = (pd.Series(values).shift(1)
+                               .rolling(window=10, min_periods=1).mean())
+                    for pos, idx in enumerate(tm.index):
+                        side = 'HOME' if home_mask[pos] else 'AWAY'
+                        col = f'{metric}_L10_{side}'
+                        new_v = rolling.iloc[pos]
+                        old_v = df.at[idx, col]
+                        old_na, new_na = pd.isna(old_v), pd.isna(new_v)
+                        if (old_na and not new_na) or (not old_na and new_na) or \
+                           (not old_na and not new_na and
+                            abs(float(old_v) - float(new_v)) > 1e-6):
+                            n_changed += 1
+                        df.at[idx, col] = new_v
+        
+        after_nulls = int(df[l10_cols].isna().sum().sum())
+        logger.info(
+            f"Recalculo L10 (fórmula de 01): {n_changed} valores cambiados, "
+            f"{before_notnull} no-nulos antes → {after_nulls - before_nulls:+d} nulls "
+            f"({before_nulls} → {after_nulls})")
     
     def calculate_differential_features(self) -> pd.DataFrame:
         """
